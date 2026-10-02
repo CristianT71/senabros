@@ -892,7 +892,7 @@ let toastTimer = 0;
 function toast(t, ms = 1500) { toastEl.textContent = t; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms); }
 
 function addScore(n) { game.score += n; }
-function addCoinCount() { game.coins++; addScore(200); SFX.coin(); if (game.coins % 50 === 0) { game.lives++; SFX.oneup(); toast('1-UP!'); } }
+function addCoinCount() { game.coins++; addScore(200); addEnergy(1); missionProgress('coins'); SFX.coin(); if (game.coins % 50 === 0) { game.lives++; SFX.oneup(); toast('1-UP!'); } }
 
 function resetPlayer(x) {
   Object.assign(player, { x, y: 2, vx: 0, vy: 0, facing: 1, grounded: false, crouch: false, pound: false, punchT: 0, landT: 0, dead: false, deadT: 0, invT: 1.2, rot: 0,
@@ -907,7 +907,7 @@ function startLevel(i) {
   buildLevel();
   if (map.group) map.group.visible = false;
   levelGroup.visible = true; if (BG.mesh) BG.mesh.visible = true;
-  game.checkpoint = 3; game.time = L.time; game.state = 'play';
+  game.checkpoint = 3; game.time = L.time; game.state = 'play'; game.hurt = false;
   resetPlayer(3); setMenu(false); setMap(false);
   overlay.classList.remove('show');
   worldLabel.textContent = (game.world + 1) + '-' + (i + 1);
@@ -927,6 +927,7 @@ function transition(fn) {
 }
 function completeLevel() {
   const w = game.world, n = game.level + 1, pg = game.progress;
+  missionProgress('levels'); if (!game.hurt) missionProgress('flawless'); if (game.winTime >= 150) missionProgress('fast');
   if (n > pg.done[w]) pg.done[w] = n;
   pg.node[w] = n; pg.world = w; saveProgress();
   if (n === WORLDS[w].count) startGlory();          // último nivel del mundo: ¡gloria!
@@ -1005,11 +1006,12 @@ function showTitle(msg) {
 function die() {
   if (player.dead || game.state !== 'play') return;
   player.dead = true; player.deadT = 0; player.vx = 0; player.vy = 0; player.pound = false; player.facing = 1; player.rot = 0;
-  play('M_Death', { loop: false, fade: 0.05 }); SFX.die(); game.lives--;
+  play('M_Death', { loop: false, fade: 0.05 }); SFX.die(); game.lives--; game.hurt = true;
 }
 // recibir daño: si es grande se encoge, si es pequeño muere
 function damage() {
   if (player.shieldT > 0 || player.dashT > 0) return;   // Estructura Estable / dash: invulnerable
+  game.hurt = true;
   if (player.big) { player.big = false; player.growT = 0.8; player.invT = 2.0; SFX.shrink(); }
   else die();
 }
@@ -1029,6 +1031,8 @@ function startWin() {
   game.state = 'win'; game.winT = 0; player.vx = 0; player.vy = 0; player.pound = false;
   player.x = FLAGX + 0.5 - 0.35; player.facing = 1;
   const bonus = Math.floor(player.y - 2) * 400 + 1000; addScore(bonus); toast('+' + bonus, 1200);
+  game.winTime = game.time;
+  if (player.y >= 9.5) missionProgress('flagTop');
   play('M_Fall', { fade: 0.1 });
 }
 
@@ -1037,6 +1041,7 @@ function killEnemy(e, how) {
   if (!e.alive) return;
   if (e.def.kind === 'boss' && how !== 'boss') return;   // al jefe solo se le vence pisándolo
   e.alive = false; e.deadT = 0; e.mode = how; addScore(e.def.score * (how === 'stomp' ? 1 : 2));
+  if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); }
   if (how === 'stomp') { SFX.stomp(); e.body.scale.y = 0.3 * e.def.scale; spawnFrag(e.x, e.y + 0.3, MAT.stone, 4, 3); }
   else { SFX.punch(); e.vy = 9; e.vx = player.facing * 3; e.mesh.rotation.z = Math.PI; }
 }
@@ -1049,7 +1054,7 @@ function hitBlock(tx, ty, fromPlayer) {
     else { popCoin(tx + 0.5, ty + 1.2); addCoinCount(); }
   } else if (c === 'B' && fromPlayer) {
     grid[tx][ty] = null; const m = blockMesh[key]; if (m) { levelGroup.remove(m); delete blockMesh[key]; }
-    spawnFrag(tx + 0.5, ty + 0.5, MAT.brick); SFX.brk(); addScore(50);
+    spawnFrag(tx + 0.5, ty + 0.5, MAT.brick); SFX.brk(); addScore(50); addEnergy(1); missionProgress('bricks');
   } else { bump(key); SFX.bump(); }
   enemies.forEach(e => { if (e.alive && Math.abs(e.x - (tx + 0.5)) < 0.8 && Math.abs(e.y - (ty + 1)) < 0.25) killEnemy(e, 'flip'); });
   coins.forEach(cn => { if (!cn.taken && Math.abs(cn.x - (tx + 0.5)) < 0.5 && Math.abs(cn.y - (ty + 1.5)) < 0.6) { cn.taken = true; levelGroup.remove(cn.m); popCoin(cn.x, cn.y); addCoinCount(); } });
@@ -1081,15 +1086,46 @@ function poundLand() {
 // ================= Poderes de los instructores =================
 // Cada instructor tiene un poder (tecla K / botón ⚡) con recarga y efectos propios.
 const POWERS = {
-  Diego:     { name: 'Estructura Estable', area: 'Backend y Arquitectura', icon: '🛡', color: '#ffd23f', cd: 12, desc: 'Invulnerable 4,5 s: destruye lo que toca' },
-  Wilson:    { name: 'Escudo SQL', area: 'Bases de Datos', icon: '🗄', color: '#4ad8ff', cd: 9, desc: 'Onda expansiva que borra los bugs cercanos' },
-  Juan:      { name: 'Cálculo de Vector', area: 'Matemáticas e Ing. de Sistemas', icon: '📐', color: '#b36bff', cd: 1.1, desc: 'Dispara figuras geométricas' },
-  Carlos:    { name: 'Sprint Ágil', area: 'Metodologías Ágiles', icon: '📋', color: '#39d98a', cd: 14, desc: 'Bugs en cámara lenta 6 s y tú más rápido' },
-  Intructor: { name: 'Salto Coordinado', area: 'Formación Integral', icon: '🦘', color: '#ff8a1a', cd: 5, desc: 'Doble salto siempre + súper salto' },
-  Jhonny:    { name: 'Dash Idiomático', area: 'Idiomas y Bilingüismo', icon: '💨', color: '#ff4a8a', cd: 0.8, desc: 'Impulso veloz, también en el aire' },
-  Fabian:    { name: 'Render </>', area: 'Frontend e Interfaces', icon: '</>', color: '#39a9ff', cd: 7, desc: 'Construye un puente de código' },
+  Diego:     { name: 'Estructura Estable', area: 'Backend y Arquitectura', icon: '🛡', color: '#ffd23f', cd: 6, cost: 8, desc: 'Invulnerable 4,5 s: destruye lo que toca' },
+  Wilson:    { name: 'Escudo SQL', area: 'Bases de Datos', icon: '🗄', color: '#4ad8ff', cd: 5, cost: 7, desc: 'Onda expansiva que borra los bugs cercanos' },
+  Juan:      { name: 'Cálculo de Vector', area: 'Matemáticas e Ing. de Sistemas', icon: '📐', color: '#b36bff', cd: 0.6, cost: 2, desc: 'Dispara figuras geométricas' },
+  Carlos:    { name: 'Sprint Ágil', area: 'Metodologías Ágiles', icon: '📋', color: '#39d98a', cd: 8, cost: 8, desc: 'Bugs en cámara lenta 6 s y tú más rápido' },
+  Intructor: { name: 'Salto Coordinado', area: 'Formación Integral', icon: '🦘', color: '#ff8a1a', cd: 2, cost: 5, desc: 'Doble salto siempre + súper salto' },
+  Jhonny:    { name: 'Dash Idiomático', area: 'Idiomas y Bilingüismo', icon: '💨', color: '#ff4a8a', cd: 0.5, cost: 1, desc: 'Impulso veloz, también en el aire' },
+  Fabian:    { name: 'Render </>', area: 'Frontend e Interfaces', icon: '</>', color: '#39a9ff', cd: 3, cost: 5, desc: 'Construye un puente de código' },
 };
 const curPowerId = () => CHARS[charIdx][0];
+// Misiones para desbloquear cada poder (el progreso se guarda por instructor)
+const MISSIONS = {
+  Diego:     { text: 'Completa un nivel sin recibir daño', goal: 1, stat: 'flawless', unit: 'nivel' },
+  Wilson:    { text: 'Derrota 15 bugs', goal: 15, stat: 'kills', unit: 'bugs' },
+  Juan:      { text: 'Rompe 15 ladrillos', goal: 15, stat: 'bricks', unit: 'ladrillos' },
+  Carlos:    { text: 'Termina un nivel con 150 s o más en el reloj', goal: 1, stat: 'fast', unit: 'nivel' },
+  Intructor: { text: 'Toca la punta del asta de la bandera', goal: 1, stat: 'flagTop', unit: 'vez' },
+  Jhonny:    { text: 'Recoge 50 monedas', goal: 50, stat: 'coins', unit: 'monedas' },
+  Fabian:    { text: 'Completa 3 niveles', goal: 3, stat: 'levels', unit: 'niveles' },
+};
+const ENERGY_MAX = 10;
+function loadPowers() { try { return JSON.parse(localStorage.getItem('senabros_powers') || '{}'); } catch (_) { return {}; } }
+const powerData = loadPowers();
+function pstat(id = curPowerId()) { return powerData[id] || (powerData[id] = { unlocked: false }); }
+const powerUnlocked = (id = curPowerId()) => !!pstat(id).unlocked;
+function savePowers() { try { localStorage.setItem('senabros_powers', JSON.stringify(powerData)); } catch (_) {} }
+// suma progreso a la misión del instructor actual y lo desbloquea al cumplirla
+function missionProgress(stat, n = 1) {
+  const id = curPowerId(), M = MISSIONS[id], d = pstat(id);
+  if (d.unlocked || !M || M.stat !== stat) return;
+  d[stat] = (d[stat] || 0) + n; savePowers();
+  if (d[stat] >= M.goal) {
+    d.unlocked = true; savePowers();
+    const P = POWERS[id];
+    powerBanner({ icon: P.icon, name: '¡Poder desbloqueado! ' + P.name, color: P.color });
+    SFX.oneup(); setTimeout(() => SFX.powerup(), 400); burstColor(player.x, player.y + 1, new T.Color(P.color), 60, 9);
+    game.energy = ENERGY_MAX; toast('Tecla K para usarlo', 2200); setPowerUI();
+  } else if (M.goal > 1 && (d[stat] % Math.max(1, Math.floor(M.goal / 5)) === 0)) toast(`Misión: ${d[stat]}/${M.goal} ${M.unit}`, 900);
+}
+// energía: monedas +1, bugs +2, ladrillos +1
+function addEnergy(n) { game.energy = Math.min(ENERGY_MAX, (game.energy || 0) + n); }
 const curPower = () => POWERS[curPowerId()];
 
 // --- efectos temporales: { obj, t, life, upd(obj, k, dt) -> true para terminar antes } ---
@@ -1141,13 +1177,18 @@ function setPowerUI() {   // icono/nombre/color del poder del personaje actual
   phIcon.textContent = P.icon; phName.textContent = P.name.toUpperCase(); if (tPowIcon) tPowIcon.textContent = P.icon;
   const role = document.getElementById('charRole'), cp = document.getElementById('charPower');
   if (role) role.textContent = P.area;
-  if (cp) cp.innerHTML = `${P.icon} ${P.name.replace('<', '&lt;').replace('>', '&gt;')}<small>${P.desc}</small>`;
+  const id = curPowerId(), M = MISSIONS[id], d = pstat(id), nm = P.name.replace('<', '&lt;').replace('>', '&gt;');
+  if (cp) cp.innerHTML = powerUnlocked(id) ? `${P.icon} ${nm} <span class="ok">✔</span><small>${P.desc}</small>`
+    : `🔒 ${nm}<small>Misión: ${M.text} (${Math.min(d[M.stat] || 0, M.goal)}/${M.goal})</small>`;
 }
 function updatePowerUI() {
   const P = curPower(); if (!P) return;
-  const pct = player.powerCD > 0 ? Math.round((1 - player.powerCD / P.cd) * 100) : 100, ready = pct >= 100;
-  powerHud.style.setProperty('--p', pct); powerHud.classList.toggle('ready', ready);
-  phState.textContent = ready ? 'LISTO · tecla K' : 'recargando ' + player.powerCD.toFixed(1) + ' s';
+  const id = curPowerId(), unlocked = powerUnlocked(id), en = game.energy || 0;
+  const pct = unlocked ? Math.round(Math.min(1, en / P.cost) * 100) : 0, ready = unlocked && en >= P.cost && player.powerCD <= 0;
+  powerHud.style.setProperty('--p', pct); powerHud.classList.toggle('ready', ready); powerHud.classList.toggle('locked', !unlocked);
+  if (!unlocked) { const M = MISSIONS[id], d = pstat(id); phState.textContent = `🔒 misión ${Math.min(d[M.stat] || 0, M.goal)}/${M.goal} ${M.unit}`; }
+  else phState.textContent = ready ? 'LISTO · tecla K' : `energía ${en}/${P.cost}`;
+  phIcon.textContent = unlocked ? P.icon : '🔒'; if (tPowIcon) tPowIcon.textContent = unlocked ? P.icon : '🔒';
   if (tPow) { tPow.style.setProperty('--p', pct); tPow.classList.toggle('ready', ready); }
   const on = player.slowT > 0 && game.state === 'play';
   sprintFx.classList.toggle('on', on); if (on) sprintTEl.textContent = Math.ceil(player.slowT);
@@ -1169,6 +1210,8 @@ let shapeIdx = 0;
 function usePower() {
   const p = player, P = curPower(), id = curPowerId();
   if (!P || p.powerCD > 0 || p.dead || game.state !== 'play') return;
+  if (!powerUnlocked(id)) { const M = MISSIONS[id], d = pstat(id); toast(`🔒 ${M.text} (${d[M.stat] || 0}/${M.goal})`, 1800); SFX.bump(); p.powerCD = 1; return; }
+  if ((game.energy || 0) < P.cost) { toast(`Energía ${game.energy || 0}/${P.cost}: recoge monedas y vence bugs`, 1300); SFX.bump(); p.powerCD = 0.6; return; }
   const cx = p.x, cy = p.y + p.h * 0.55, col = new T.Color(P.color);
   if (id === 'Diego') {
     // Estructura Estable: cúpula geodésica dorada + núcleo, invulnerable y destruye lo que toca
@@ -1297,7 +1340,7 @@ function usePower() {
     for (let i = 0; i < w; i++) setTimeout(() => beep(900 + i * 120, 0.05, 'square', 0.03), i * 60);
     burstColor(x0 + w / 2, top, 0x39a9ff, 30, 5);
   }
-  p.powerCD = P.cd;
+  p.powerCD = P.cd; game.energy -= P.cost;
   if (id !== 'Jhonny' && id !== 'Juan') powerBanner(P);
   else if (!p.bannerShown) { powerBanner(P); p.bannerShown = true; }
 }
@@ -1410,7 +1453,7 @@ function updatePlayer(dt) {
     if (p.jumpBuf > 0 && p.coyote > 0 && !p.crouch) {
       p.vy = JUMP + Math.abs(p.vx) * 0.22; p.grounded = false; p.coyote = 0; p.jumpBuf = 0;
       SFX.jump(); play('M_Jump', { loop: false, fade: 0.05 });
-    } else if (pressed.jump && !p.grounded && p.coyote <= 0 && p.airJumps > 0 && !p.crouch && curPowerId() === 'Intructor') doubleJump(p);
+    } else if (pressed.jump && !p.grounded && p.coyote <= 0 && p.airJumps > 0 && !p.crouch && curPowerId() === 'Intructor' && powerUnlocked('Intructor')) doubleJump(p);
     const g = (p.vy > 0 && jumpHeld) ? GRAV : GRAV * 1.8;
     p.vy = Math.max(-MAXFALL, p.vy - g * dt);
     }
@@ -1709,7 +1752,7 @@ function setMap(on) { document.body.classList.toggle('map', on); }
 function startWithTransition() {   // desde el menú: nueva partida -> mapa del mundo
   if (transitioning || charLoading || !inMenu()) return;
   SFX.powerup();
-  transition(() => { Object.assign(game, { score: 0, coins: 0, lives: 3 }); game.world = game.progress.world; showMap({ banner: true }); });
+  transition(() => { Object.assign(game, { score: 0, coins: 0, lives: 3, energy: 0 }); game.world = game.progress.world; showMap({ banner: true }); });
 }
 
 // ================= Mapa del mundo (estilo Super Mario Bros 3) =================

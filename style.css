@@ -436,3 +436,7 @@ body.touch.map.tedit .tb-p { display: flex; }
   #sprintFx { padding-top: 46px; } #sprintFx span { font-size: 12px; } #sprintFx b { top: 70px; font-size: 30px; }
   .cpow { font-size: 10px; margin-top: 2px; } .cpow small { display: none; }
 }
+
+/* poder bloqueado (misión pendiente) */
+#powerHud.locked .ph-ring { filter: grayscale(1); opacity: .8; }
+.cpow .ok { color: var(--sena-l); }
