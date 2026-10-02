@@ -20,6 +20,38 @@
     <div><small>VIDAS</small><span id="lives">3</span></div>
   </div>
 
+  <button id="acctChip" class="chip" type="button">&#128100; Entrar / Crear cuenta</button>
+
+  <!-- Cuenta, amigos y progreso en la nube -->
+  <div id="acctModal">
+    <div class="acct-card">
+      <button id="acctClose" class="acct-x" aria-label="Cerrar">&times;</button>
+      <div id="acctOut">
+        <div class="acct-title">&#128100; TU CUENTA SENA BROS</div>
+        <div class="acct-sub">Guarda tu progreso en la nube y juega con tus amigos</div>
+        <div class="tabs"><button id="tabLogin" type="button" class="on">Entrar</button><button id="tabSignup" type="button">Crear cuenta</button></div>
+        <form id="acctForm" autocomplete="on">
+          <label>Usuario<input id="acctUser" type="text" maxlength="16" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+          <label>Contraseña<input id="acctPass" type="password" minlength="6" autocomplete="current-password" required></label>
+          <div id="acctHint" class="hint2"></div>
+          <button id="acctGo" type="submit" class="go">ENTRAR</button>
+        </form>
+      </div>
+      <div id="acctIn" hidden>
+        <div class="me">
+          <div><small>JUGADOR</small><b id="meName">-</b></div>
+          <div><small>TU ID (compártelo para que te agreguen)</small><b id="meCode" class="code">SB-</b><button id="meCopy" type="button" class="mini">Copiar</button></div>
+        </div>
+        <div class="ptitle">Buscar jugadores</div>
+        <div class="srow"><input id="fSearch" type="text" placeholder="Usuario o ID (SB-XXXXXX)" maxlength="20" autocapitalize="none" spellcheck="false"><button id="fGo" type="button" class="mini ok">Buscar</button></div>
+        <div id="fSearchOut"></div>
+        <div id="fList"></div>
+        <div class="acct-foot"><button id="acctLogout" type="button" class="mini">Cerrar sesión</button><button id="acctDelete" type="button" class="mini danger">Borrar mi cuenta</button></div>
+      </div>
+      <div id="acctMsg"></div>
+    </div>
+  </div>
+
   <div id="overlay" class="show">
     <div class="rays"></div>
     <div class="menu-col">
@@ -159,7 +191,10 @@
   <script src="assets/enemigos.js"></script>
   <script src="assets/fondo-yamboro.js"></script>
   <script src="assets/retratos.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
   <script src="js/game.js"></script>
   <script src="js/touch.js"></script>
+  <script src="js/online.js"></script>
 </body>
 </html>

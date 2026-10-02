@@ -882,7 +882,7 @@ function loadProgress() {
     return { done: [d[0] | 0, d[1] | 0], node: [n[0] | 0, n[1] | 0], world: p.world | 0 };
   } catch (_) { return { done: [0, 0], node: [0, 0], world: 0 }; }
 }
-function saveProgress() { try { localStorage.setItem('senabros_progress', JSON.stringify(game.progress)); } catch (_) {} }
+function saveProgress() { try { localStorage.setItem('senabros_progress', JSON.stringify(game.progress)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
 const game = { state: 'loading', score: 0, coins: 0, lives: 3, time: TIME_LIMIT, checkpoint: 3, winT: 0, level: 0, world: 0, progress: loadProgress() };
 game.world = game.progress.world;
 const worldLabel = document.getElementById('worldLabel');
@@ -926,6 +926,7 @@ function transition(fn) {
   }, 460);
 }
 function completeLevel() {
+  recordBest();
   const w = game.world, n = game.level + 1, pg = game.progress;
   missionProgress('levels'); if (!game.hurt) missionProgress('flawless'); if (game.winTime >= 150) missionProgress('fast');
   if (n > pg.done[w]) pg.done[w] = n;
@@ -1021,6 +1022,7 @@ function grow() {
   player.big = true; player.growT = 0.8; SFX.powerup(); toast('¡GRANDE!', 900);
 }
 function afterDeath() {
+  if (game.lives <= 0) recordBest();
   if (game.lives > 0) { game.time = levelSpec(game.level).time; resetPlayer(game.checkpoint); }
   else {
     showTitle(`<b>GAME OVER</b> &middot; Puntos: ${game.score}<br>Tu progreso en el mapa se guardó. ¡Inténtalo otra vez!`);
@@ -1108,9 +1110,19 @@ const MISSIONS = {
 const ENERGY_MAX = 10;
 function loadPowers() { try { return JSON.parse(localStorage.getItem('senabros_powers') || '{}'); } catch (_) { return {}; } }
 const powerData = loadPowers();
+// ---- enlaces con js/online.js (cuenta en la nube) ----
+window.SENA_RELOAD = () => {   // la nube trajo progreso nuevo: releerlo del almacenamiento local
+  Object.assign(game.progress, loadProgress()); game.world = game.progress.world;
+  for (const k of Object.keys(powerData)) delete powerData[k];
+  Object.assign(powerData, loadPowers()); setPowerUI();
+};
+window.SENA_BEST_SCORE = () => +(localStorage.getItem('senabros_best') || 0);
+function recordBest() {
+  if (game.score > window.SENA_BEST_SCORE()) { try { localStorage.setItem('senabros_best', String(game.score)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
+}
 function pstat(id = curPowerId()) { return powerData[id] || (powerData[id] = { unlocked: false }); }
 const powerUnlocked = (id = curPowerId()) => !!pstat(id).unlocked;
-function savePowers() { try { localStorage.setItem('senabros_powers', JSON.stringify(powerData)); } catch (_) {} }
+function savePowers() { try { localStorage.setItem('senabros_powers', JSON.stringify(powerData)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
 // suma progreso a la misión del instructor actual y lo desbloquea al cumplirla
 function missionProgress(stat, n = 1) {
   const id = curPowerId(), M = MISSIONS[id], d = pstat(id);
@@ -1365,6 +1377,7 @@ function dashTrail(p) {
 const keys = {}, pressed = {};
 const MAP = { jump: ['Space', 'ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], punch: ['KeyJ'], power: ['KeyK'] };
 addEventListener('keydown', e => {
+  if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;   // escribiendo en el formulario de cuenta
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
   if (e.repeat) return;
