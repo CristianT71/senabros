@@ -902,7 +902,7 @@ function resetPlayer(x) {
 }
 // entra a un nivel (índice 0..5)
 function startLevel(i) {
-  game.level = i; const L = levelSpec(i);
+  game.level = i; const L = levelSpec(i); game.runKills = 0;
   WATER_LVL = !!L.water;
   buildLevel();
   if (map.group) map.group.visible = false;
@@ -926,6 +926,7 @@ function transition(fn) {
   }, 460);
 }
 function completeLevel() {
+  if (game.challenge) { finishChallenge(); return; }
   recordBest();
   const w = game.world, n = game.level + 1, pg = game.progress;
   missionProgress('levels'); if (!game.hurt) missionProgress('flawless'); if (game.winTime >= 150) missionProgress('fast');
@@ -933,6 +934,30 @@ function completeLevel() {
   pg.node[w] = n; pg.world = w; saveProgress();
   if (n === WORLDS[w].count) startGlory();          // último nivel del mundo: ¡gloria!
   else transition(() => showMap({ banner: true, cleared: n }));
+}
+
+// ================= Retos entre amigos =================
+const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
+window.SENA_LEVELS = () => [0, 1].flatMap(w => Array.from({ length: WORLDS[w].count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name })));
+window.SENA_PLAY_CHALLENGE = ch => {   // la llama js/online.js al pulsar "Jugar" en un reto
+  if (game.state === 'loading' || transitioning || charLoading) return false;
+  transition(() => {
+    Object.assign(game, { score: 0, coins: 0, lives: 3, energy: 0, challenge: ch });
+    game.world = ch.world - 1; MAPN = WORLDS[game.world].nodes;
+    startLevel(ch.level - 1);
+    worldLabel.textContent = 'RETO';
+    toast('RETO contra ' + ch.rival + ': ' + CHALLENGE_LABEL[ch.kind], 2200);
+  });
+  return true;
+};
+function challengeValue(c) {
+  return c.kind === 'coins' ? game.coins : c.kind === 'kills' ? (game.runKills || 0) : c.kind === 'score' ? game.score : Math.max(0, Math.ceil(game.winTime || 0));
+}
+async function finishChallenge() {
+  const c = game.challenge, value = challengeValue(c); game.challenge = null;
+  toast('Reto terminado: ' + value + ' (' + CHALLENGE_LABEL[c.kind].toLowerCase() + ')', 3000); SFX.win();
+  const err = window.SenaOnline ? await SenaOnline.submitChallenge(c.id, value) : 'Sin conexión';
+  transition(() => { showTitle(err ? 'No se pudo enviar tu resultado: ' + err : 'Resultado enviado: ' + value + '. Mira cómo quedó el reto.'); if (window.SenaOnline && !err) SenaOnline.openChallenges(); });
 }
 
 // ================= Gloria al completar un mundo =================
@@ -995,6 +1020,7 @@ function gloryContinue() {
 }
 document.getElementById('gBtn').onclick = gloryContinue;
 function showTitle(msg) {
+  game.challenge = null;
   game.state = 'title'; setMap(false); setMenu(true);
   if (map.group) map.group.visible = false;
   if (levelGroup) levelGroup.visible = true; if (BG.mesh) BG.mesh.visible = true;
@@ -1043,7 +1069,7 @@ function killEnemy(e, how) {
   if (!e.alive) return;
   if (e.def.kind === 'boss' && how !== 'boss') return;   // al jefe solo se le vence pisándolo
   e.alive = false; e.deadT = 0; e.mode = how; addScore(e.def.score * (how === 'stomp' ? 1 : 2));
-  if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); }
+  if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); game.runKills = (game.runKills || 0) + 1; }
   if (how === 'stomp') { SFX.stomp(); e.body.scale.y = 0.3 * e.def.scale; spawnFrag(e.x, e.y + 0.3, MAT.stone, 4, 3); }
   else { SFX.punch(); e.vy = 9; e.vx = player.facing * 3; e.mesh.rotation.z = Math.PI; }
 }
@@ -1086,17 +1112,31 @@ function poundLand() {
 
 
 // ================= Poderes de los instructores =================
-// Cada instructor tiene un poder (tecla K / botón ⚡) con recarga y efectos propios.
+// Cada instructor tiene un poder (tecla K o botón de poder) con recarga y efectos propios.
 const POWERS = {
-  Diego:     { name: 'Estructura Estable', area: 'Backend y Arquitectura', icon: '🛡', color: '#ffd23f', cd: 6, cost: 8, desc: 'Invulnerable 4,5 s: destruye lo que toca' },
-  Wilson:    { name: 'Escudo SQL', area: 'Bases de Datos', icon: '🗄', color: '#4ad8ff', cd: 5, cost: 7, desc: 'Onda expansiva que borra los bugs cercanos' },
-  Juan:      { name: 'Cálculo de Vector', area: 'Matemáticas e Ing. de Sistemas', icon: '📐', color: '#b36bff', cd: 0.6, cost: 2, desc: 'Dispara figuras geométricas' },
-  Carlos:    { name: 'Sprint Ágil', area: 'Metodologías Ágiles', icon: '📋', color: '#39d98a', cd: 8, cost: 8, desc: 'Bugs en cámara lenta 6 s y tú más rápido' },
-  Intructor: { name: 'Salto Coordinado', area: 'Formación Integral', icon: '🦘', color: '#ff8a1a', cd: 2, cost: 5, desc: 'Doble salto siempre + súper salto' },
-  Jhonny:    { name: 'Dash Idiomático', area: 'Idiomas y Bilingüismo', icon: '💨', color: '#ff4a8a', cd: 0.5, cost: 1, desc: 'Impulso veloz, también en el aire' },
-  Fabian:    { name: 'Render </>', area: 'Frontend e Interfaces', icon: '</>', color: '#39a9ff', cd: 3, cost: 5, desc: 'Construye un puente de código' },
+  Diego:     { name: 'Estructura Estable', area: 'Backend y Arquitectura', icon: 'shield', color: '#ffd23f', cd: 6, cost: 8, desc: 'Invulnerable 4,5 s: destruye lo que toca' },
+  Wilson:    { name: 'Escudo SQL', area: 'Bases de Datos', icon: 'database', color: '#4ad8ff', cd: 5, cost: 7, desc: 'Onda expansiva que borra los bugs cercanos' },
+  Juan:      { name: 'Cálculo de Vector', area: 'Matemáticas e Ing. de Sistemas', icon: 'vector', color: '#b36bff', cd: 0.6, cost: 2, desc: 'Dispara figuras geométricas' },
+  Carlos:    { name: 'Sprint Ágil', area: 'Metodologías Ágiles', icon: 'board', color: '#39d98a', cd: 8, cost: 8, desc: 'Bugs en cámara lenta 6 s y tú más rápido' },
+  Intructor: { name: 'Salto Coordinado', area: 'Formación Integral', icon: 'jump', color: '#ff8a1a', cd: 2, cost: 5, desc: 'Doble salto siempre + súper salto' },
+  Jhonny:    { name: 'Dash Idiomático', area: 'Idiomas y Bilingüismo', icon: 'dash', color: '#ff4a8a', cd: 0.5, cost: 1, desc: 'Impulso veloz, también en el aire' },
+  Fabian:    { name: 'Render </>', area: 'Frontend e Interfaces', icon: 'code', color: '#39a9ff', cd: 3, cost: 5, desc: 'Construye un puente de código' },
 };
 const curPowerId = () => CHARS[charIdx][0];
+// Iconos de línea dibujados con SVG (el juego no usa emojis)
+const ICONS = {
+  shield:   '<path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
+  database: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>',
+  vector:   '<path d="M4 20L20 4"/><path d="M11 4h9v9"/><path d="M4 20h6"/>',
+  board:    '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/><path d="M5.5 8h1.5M11 8h2M17 8h1.5"/>',
+  jump:     '<path d="M12 20V6"/><path d="M6 12l6-6 6 6"/><path d="M7 20h10"/>',
+  dash:     '<path d="M3 8h9M2 12h13M5 16h9"/><path d="M15 6l6 6-6 6"/>',
+  code:     '<path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/>',
+  lock:     '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+};
+function iconSvg(name, size = 22) {
+  return `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+}
 // Misiones para desbloquear cada poder (el progreso se guarda por instructor)
 const MISSIONS = {
   Diego:     { text: 'Completa un nivel sin recibir daño', goal: 1, stat: 'flawless', unit: 'nivel' },
@@ -1179,28 +1219,28 @@ const tPow = document.getElementById('tPow'), tPowIcon = document.getElementById
 const sprintFx = document.getElementById('sprintFx'), sprintTEl = document.getElementById('sprintT');
 function powerBanner(P) {
   const b = document.getElementById('powerBanner'), f = document.getElementById('powerFlash');
-  document.getElementById('pbIcon').textContent = P.icon; document.getElementById('pbName').textContent = P.name.toUpperCase();
+  document.getElementById('pbIcon').innerHTML = iconSvg(P.icon, 34); document.getElementById('pbName').textContent = P.name.toUpperCase();
   b.style.setProperty('--pc', P.color); f.style.setProperty('--pc', P.color);
   b.classList.remove('show'); f.classList.remove('on'); void b.offsetWidth; b.classList.add('show'); f.classList.add('on');
 }
 function setPowerUI() {   // icono/nombre/color del poder del personaje actual
   const P = curPower(); if (!P) return;
   [powerHud, tPow].forEach(el => el && el.style.setProperty('--pc', P.color));
-  phIcon.textContent = P.icon; phName.textContent = P.name.toUpperCase(); if (tPowIcon) tPowIcon.textContent = P.icon;
+  phIcon.innerHTML = iconSvg(P.icon); phName.textContent = P.name.toUpperCase(); if (tPowIcon) tPowIcon.innerHTML = iconSvg(P.icon, 26);
   const role = document.getElementById('charRole'), cp = document.getElementById('charPower');
   if (role) role.textContent = P.area;
   const id = curPowerId(), M = MISSIONS[id], d = pstat(id), nm = P.name.replace('<', '&lt;').replace('>', '&gt;');
-  if (cp) cp.innerHTML = powerUnlocked(id) ? `${P.icon} ${nm} <span class="ok">✔</span><small>${P.desc}</small>`
-    : `🔒 ${nm}<small>Misión: ${M.text} (${Math.min(d[M.stat] || 0, M.goal)}/${M.goal})</small>`;
+  if (cp) cp.innerHTML = powerUnlocked(id) ? `${iconSvg(P.icon, 14)} ${nm} <span class="ok">activo</span><small>${P.desc}</small>`
+    : `${iconSvg('lock', 14)} ${nm}<small>Misión: ${M.text} (${Math.min(d[M.stat] || 0, M.goal)}/${M.goal})</small>`;
 }
 function updatePowerUI() {
   const P = curPower(); if (!P) return;
   const id = curPowerId(), unlocked = powerUnlocked(id), en = game.energy || 0;
   const pct = unlocked ? Math.round(Math.min(1, en / P.cost) * 100) : 0, ready = unlocked && en >= P.cost && player.powerCD <= 0;
   powerHud.style.setProperty('--p', pct); powerHud.classList.toggle('ready', ready); powerHud.classList.toggle('locked', !unlocked);
-  if (!unlocked) { const M = MISSIONS[id], d = pstat(id); phState.textContent = `🔒 misión ${Math.min(d[M.stat] || 0, M.goal)}/${M.goal} ${M.unit}`; }
+  if (!unlocked) { const M = MISSIONS[id], d = pstat(id); phState.textContent = `Bloqueado: misión ${Math.min(d[M.stat] || 0, M.goal)}/${M.goal} ${M.unit}`; }
   else phState.textContent = ready ? 'LISTO · tecla K' : `energía ${en}/${P.cost}`;
-  phIcon.textContent = unlocked ? P.icon : '🔒'; if (tPowIcon) tPowIcon.textContent = unlocked ? P.icon : '🔒';
+  phIcon.innerHTML = iconSvg(unlocked ? P.icon : 'lock'); if (tPowIcon) tPowIcon.innerHTML = iconSvg(unlocked ? P.icon : 'lock', 26);
   if (tPow) { tPow.style.setProperty('--p', pct); tPow.classList.toggle('ready', ready); }
   const on = player.slowT > 0 && game.state === 'play';
   sprintFx.classList.toggle('on', on); if (on) sprintTEl.textContent = Math.ceil(player.slowT);
@@ -1222,7 +1262,7 @@ let shapeIdx = 0;
 function usePower() {
   const p = player, P = curPower(), id = curPowerId();
   if (!P || p.powerCD > 0 || p.dead || game.state !== 'play') return;
-  if (!powerUnlocked(id)) { const M = MISSIONS[id], d = pstat(id); toast(`🔒 ${M.text} (${d[M.stat] || 0}/${M.goal})`, 1800); SFX.bump(); p.powerCD = 1; return; }
+  if (!powerUnlocked(id)) { const M = MISSIONS[id], d = pstat(id); toast(`Poder bloqueado. Misión: ${M.text} (${d[M.stat] || 0}/${M.goal})`, 1800); SFX.bump(); p.powerCD = 1; return; }
   if ((game.energy || 0) < P.cost) { toast(`Energía ${game.energy || 0}/${P.cost}: recoge monedas y vence bugs`, 1300); SFX.bump(); p.powerCD = 0.6; return; }
   const cx = p.x, cy = p.y + p.h * 0.55, col = new T.Color(P.color);
   if (id === 'Diego') {
@@ -1287,7 +1327,7 @@ function usePower() {
         burstColor(o.position.x, o.position.y, 0xb36bff, 18, 5); return true;
       }
       for (const e of enemies) if (e.alive && Math.abs(e.x - o.position.x) < e.hw + 0.4 && o.position.y > e.y - 0.2 && o.position.y < e.y + e.h + 0.2) {
-        if (hurtEnemy(e)) { burstColor(o.position.x, o.position.y, 0xb36bff, 24, 6); floatText('✓ Q.E.D.', '#e2c8ff', o.position.x, o.position.y + 0.8, 0.6, 0.9); return true; }
+        if (hurtEnemy(e)) { burstColor(o.position.x, o.position.y, 0xb36bff, 24, 6); floatText('Q.E.D.', '#e2c8ff', o.position.x, o.position.y + 0.8, 0.6, 0.9); return true; }
       }
     });
     // flecha del vector
@@ -1789,7 +1829,7 @@ function panelTex(num, state) {
     g.fillStyle = PANEL_COL[state]; g.fillRect(8, 8, s - 16, s - 16);
     g.strokeStyle = '#fff'; g.lineWidth = 6; g.strokeRect(14, 14, s - 28, s - 28);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
-    if (state === 'done') { g.font = 'bold 70px sans-serif'; g.fillText('✓', s / 2, s / 2 + 4); }
+    if (state === 'done') { g.strokeStyle = '#fff'; g.lineWidth = 12; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath(); g.moveTo(s * 0.3, s * 0.52); g.lineTo(s * 0.45, s * 0.67); g.lineTo(s * 0.72, s * 0.34); g.stroke(); }
     else { g.font = 'bold 64px monospace'; g.fillStyle = '#0b1a3a'; g.fillText(num, s / 2 + 4, s / 2 + 6); g.fillStyle = state === 'locked' ? '#c9ccd4' : '#fff'; g.fillText(num, s / 2, s / 2 + 2); }
   }, 128);
 }
@@ -1998,7 +2038,7 @@ function refreshPanels() {
 function nodeName(i) { const n = MAPN[i]; return n.label ? n.label : (game.world + 1) + '-' + i + '  ' + levelSpec(i - 1).name; }
 function updateMapHud() {
   const i = map.cur, st = MAPN[i].pipe ? 'pipe' : i === 0 ? '' : nodeState(i);
-  const tag = st === 'pipe' ? '<span class="go">¡ENTER para viajar!</span>' : st === 'done' ? '<span class="ok">✔ completado</span>' : st === 'open' ? '<span class="go">¡ENTER para jugar!</span>' : st === 'locked' ? '<span class="lock">🔒 bloqueado</span>' : '';
+  const tag = st === 'pipe' ? '<span class="go">¡ENTER para viajar!</span>' : st === 'done' ? '<span class="ok">completado</span>' : st === 'open' ? '<span class="go">¡ENTER para jugar!</span>' : st === 'locked' ? '<span class="lock">bloqueado</span>' : '';
   document.getElementById('mapNode').innerHTML = nodeName(i).toUpperCase() + (tag ? ' &middot; ' + tag : '');
   const [file, label] = CHARS[charIdx];
   document.getElementById('mapPortrait').src = (window.PORTRAITS && window.PORTRAITS[file]) || '';
@@ -2018,6 +2058,7 @@ function showBanner(world, name, ms = 1800) {
   clearTimeout(map.bannerTimer); map.bannerTimer = setTimeout(() => b.classList.remove('show'), ms);
 }
 function showMap({ banner = true, cleared = 0, finale = false } = {}) {
+  game.challenge = null;
   const w = game.world, pg = game.progress;
   MAPN = WORLDS[w].nodes;
   if (map.group && map.world !== w) { scene.remove(map.group); map.group = null; }
@@ -2122,6 +2163,7 @@ Promise.all(enemyEntries.map(([name, b64]) =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
+  if (/test=/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
     if (tc) await selectChar(CHARS.findIndex(c => c[0] === tc[1]));

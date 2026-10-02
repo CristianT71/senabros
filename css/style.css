@@ -497,3 +497,39 @@ body.touch.menu .chip { right: 66px; }
 .or { display: flex; align-items: center; gap: 10px; margin: 10px 0 10px; font-size: 11px; color: #bcd6b4; letter-spacing: 1px; }
 .or::before, .or::after { content: ""; flex: 1; height: 1px; background: #ffffff33; }
 .me > div { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+
+/* ================= Sin emojis: iconos propios ================= */
+.ico { vertical-align: -3px; }
+#tPad .arr { width: 0; height: 0; font-size: 0; border: 8px solid transparent; }
+#tPad .l { border-right: 11px solid #ffffffb0; border-left: 0; } #tPad .r { border-left: 11px solid #ffffffb0; border-right: 0; }
+#tPad .u { border-bottom: 11px solid #ffffffb0; border-top: 0; } #tPad .d { border-top: 11px solid #ffffffb0; border-bottom: 0; }
+#rotate .phone { width: 44px; height: 76px; border: 5px solid #fff; border-radius: 10px; position: relative; font-size: 0; }
+#rotate .phone::after { content: ""; position: absolute; left: 50%; bottom: 5px; width: 14px; height: 3px; margin-left: -7px; border-radius: 2px; background: #fff; }
+.g-trophy { color: var(--gold); }
+.ph-ring span { display: grid; place-items: center; } .ph-ring svg { display: block; }
+#powerBanner #pbIcon { display: flex; }
+.tb-p span { display: block; line-height: 0; }
+.selected button svg, #startBtn svg { display: block; } #startBtn { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.selected button { display: grid; place-items: center; }
+
+/* ================= Retos, seguridad y recuperación ================= */
+.linkbtn { background: none; border: 0; color: var(--sena-l); font: 700 13px "Trebuchet MS", sans-serif; text-decoration: underline; cursor: pointer; padding: 8px 0 0; align-self: center; }
+#acctMain { display: flex; flex-direction: column; }
+#acctRecover { display: flex; flex-direction: column; gap: 9px; } #acctRecover[hidden], [hidden] { display: none !important; }
+.rc-title { font-size: 16px; font-weight: 900; letter-spacing: 1px; color: var(--gold); text-align: center; }
+.go.small { padding: 9px 0; font-size: 15px; letter-spacing: 2px; }
+.bigcode { font: 900 30px monospace; letter-spacing: 3px; text-align: center; color: var(--gold); background: #04100a; border: 2px dashed var(--gold); border-radius: 12px; padding: 16px 6px; margin: 12px 0; user-select: all; }
+.subtabs { display: flex; gap: 6px; margin: 4px 0 10px; }
+.subtabs button { flex: 1; padding: 8px 0; border: 2px solid #ffffff33; border-radius: 10px; background: #0006; color: #fff; font: 800 13px "Trebuchet MS", sans-serif; cursor: pointer; }
+.subtabs button.on { background: var(--sena); border-color: #fff; }
+.subtabs i { font-style: normal; display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: #ff4a4a; font-size: 11px; line-height: 18px; }
+.alertbox { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding: 8px 10px; border-radius: 10px; border: 2px solid var(--gold); background: #ffd23f22; font-size: 12px; font-weight: 800; }
+.acct-card select { width: 100%; padding: 9px 10px; border-radius: 10px; border: 2px solid #ffffff55; background: #04100a; color: #fff; font-size: 14px; font-family: inherit; }
+#chForm { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
+.prow.col { flex-direction: column; align-items: stretch; gap: 4px; }
+.prow.in { display: flex; align-items: center; gap: 10px; background: none; padding: 0; margin: 0; }
+.cstatus { font-size: 12px; font-weight: 800; color: #d7e9d0; padding-left: 2px; }
+.cstatus.win { color: var(--sena-l); } .cstatus.lose { color: #ff9a9a; }
+@media (max-height: 520px) { .bigcode { font-size: 22px; padding: 10px 4px; margin: 6px 0; } .subtabs button { padding: 5px 0; } }
+
+body.touch.menu .chip { right: 108px; }

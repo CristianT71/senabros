@@ -20,35 +20,86 @@
     <div><small>VIDAS</small><span id="lives">3</span></div>
   </div>
 
-  <button id="acctChip" class="chip" type="button">&#128100; Entrar / Crear cuenta</button>
+  <button id="acctChip" class="chip" type="button">Entrar / Crear cuenta</button>
 
-  <!-- Cuenta, amigos y progreso en la nube -->
+  <!-- Cuenta, amigos, retos y progreso en la nube -->
   <div id="acctModal">
     <div class="acct-card">
       <button id="acctClose" class="acct-x" aria-label="Cerrar">&times;</button>
+
       <div id="acctOut">
-        <div class="acct-title">&#128100; TU CUENTA SENA BROS</div>
-        <div class="acct-sub">Guarda tu progreso en la nube y juega con tus amigos</div>
-        <div class="tabs"><button id="tabLogin" type="button" class="on">Entrar</button><button id="tabSignup" type="button">Crear cuenta</button></div>
-        <button id="acctGoogle" type="button" class="gbtn"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuar con Google</button>
-        <div class="or"><span>o con usuario y contraseña</span></div>
-        <form id="acctForm" autocomplete="on">
-          <label>Usuario<input id="acctUser" type="text" maxlength="16" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
-          <label>Contraseña<input id="acctPass" type="password" minlength="6" autocomplete="current-password" required></label>
-          <div id="acctHint" class="hint2"></div>
-          <button id="acctGo" type="submit" class="go">ENTRAR</button>
+        <div class="acct-title">TU CUENTA SENA BROS</div>
+        <div class="acct-sub">Guarda tu progreso en la nube, juega con amigos y rétalos</div>
+        <div id="acctMain">
+          <div class="tabs"><button id="tabLogin" type="button" class="on">Entrar</button><button id="tabSignup" type="button">Crear cuenta</button></div>
+          <button id="acctGoogle" type="button" class="gbtn"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuar con Google</button>
+          <div class="or"><span>o con usuario y contraseña</span></div>
+          <form id="acctForm" autocomplete="on">
+            <label>Usuario<input id="acctUser" type="text" maxlength="16" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+            <label>Contraseña<input id="acctPass" type="password" minlength="6" maxlength="72" autocomplete="current-password" required></label>
+            <div id="acctHint" class="hint2"></div>
+            <button id="acctGo" type="submit" class="go">ENTRAR</button>
+          </form>
+          <button id="acctForgot" type="button" class="linkbtn">Olvidé mi contraseña</button>
+        </div>
+
+        <form id="acctRecover" hidden autocomplete="off">
+          <div class="rc-title">Recuperar contraseña</div>
+          <div class="hint2">Usa el código de recuperación que te dimos al crear tu cuenta (formato XXXX-XXXX-XXXX).</div>
+          <label>Usuario<input id="rcUser" type="text" maxlength="16" autocapitalize="none" spellcheck="false" required></label>
+          <label>Código de recuperación<input id="rcCode" type="text" maxlength="20" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" required></label>
+          <label>Contraseña nueva<input id="rcPass" type="password" minlength="6" maxlength="72" autocomplete="new-password" required></label>
+          <button id="rcGo" type="submit" class="go">CAMBIAR CONTRASEÑA</button>
+          <button id="rcBack" type="button" class="linkbtn">Volver</button>
         </form>
       </div>
+
+      <div id="acctCode" hidden>
+        <div class="acct-title">TU CÓDIGO DE RECUPERACIÓN</div>
+        <div class="acct-sub">Guárdalo en un lugar seguro: lo necesitas si olvidas tu contraseña. Solo se muestra esta vez.</div>
+        <div id="codeText" class="bigcode">----</div>
+        <div class="srow"><button id="codeCopy" type="button" class="mini ok">Copiar</button><button id="codeDownload" type="button" class="mini">Descargar archivo</button></div>
+        <button id="codeDone" type="button" class="go" style="margin-top:14px">YA LO GUARDÉ</button>
+      </div>
+
       <div id="acctIn" hidden>
         <div class="me">
           <div><small>JUGADOR</small><b id="meName">-</b><button id="meRename" type="button" class="mini" hidden>Cambiar usuario (1 vez)</button></div>
           <div><small>TU ID (compártelo para que te agreguen)</small><b id="meCode" class="code">SB-</b><button id="meCopy" type="button" class="mini">Copiar</button></div>
         </div>
-        <div class="ptitle">Buscar jugadores</div>
-        <div class="srow"><input id="fSearch" type="text" placeholder="Usuario o ID (SB-XXXXXX)" maxlength="20" autocapitalize="none" spellcheck="false"><button id="fGo" type="button" class="mini ok">Buscar</button></div>
-        <div id="fSearchOut"></div>
-        <div id="fList"></div>
-        <div class="acct-foot"><button id="acctLogout" type="button" class="mini">Cerrar sesión</button><button id="acctDelete" type="button" class="mini danger">Borrar mi cuenta</button></div>
+        <div id="recAlert" class="alertbox" hidden>Aún no tienes código de recuperación. <button id="recAlertGo" type="button" class="mini ok">Generar ahora</button></div>
+        <div class="subtabs">
+          <button id="stFriends" type="button" class="on">Amigos</button>
+          <button id="stChallenges" type="button">Retos <i id="chBadge" hidden></i></button>
+          <button id="stSecurity" type="button">Seguridad</button>
+        </div>
+
+        <div id="secFriends">
+          <div class="srow"><input id="fSearch" type="text" placeholder="Usuario o ID (SB-XXXXXX)" maxlength="20" autocapitalize="none" spellcheck="false"><button id="fGo" type="button" class="mini ok">Buscar</button></div>
+          <div id="fSearchOut"></div>
+          <div id="fList"></div>
+        </div>
+
+        <div id="secChallenges" hidden>
+          <div class="ptitle">Nuevo reto</div>
+          <div id="chForm">
+            <label>Amigo<select id="chFriend"></select></label>
+            <label>Quién gana<select id="chKind">
+              <option value="coins">Más monedas</option><option value="kills">Más bugs derrotados</option>
+              <option value="score">Más puntos</option><option value="time_left">Más tiempo restante al terminar</option></select></label>
+            <label>Nivel<select id="chLevel"></select></label>
+            <button id="chSend" type="button" class="go small">ENVIAR RETO</button>
+          </div>
+          <div id="chList"></div>
+          <button id="chRefresh" type="button" class="linkbtn">Actualizar</button>
+        </div>
+
+        <div id="secSecurity" hidden>
+          <div class="ptitle">Código de recuperación</div>
+          <div id="recStatus" class="hint2"></div>
+          <button id="recGen" type="button" class="mini ok">Generar código</button>
+          <div class="acct-foot"><button id="acctLogout" type="button" class="mini">Cerrar sesión</button><button id="acctDelete" type="button" class="mini danger">Borrar mi cuenta</button></div>
+        </div>
       </div>
       <div id="acctMsg"></div>
     </div>
@@ -69,17 +120,17 @@
         <div class="panel-title">ELIGE TU INSTRUCTOR</div>
         <div id="charDots" class="roster"></div>
         <div class="selected">
-          <button id="prevChar" aria-label="Anterior">&#9664;</button>
+          <button id="prevChar" aria-label="Anterior"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 4L6 12l10 8z"/></svg></button>
           <div class="sel-text">
             <div id="charName">DIEGO</div>
             <div class="role" id="charRole">Instructor ADSO</div>
             <div class="cpow" id="charPower"></div>
           </div>
-          <button id="nextChar" aria-label="Siguiente">&#9654;</button>
+          <button id="nextChar" aria-label="Siguiente"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 4l10 8-10 8z"/></svg></button>
         </div>
       </div>
 
-      <button id="startBtn">&#9654; JUGAR</button>
+      <button id="startBtn"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 3.5l14 8.5-14 8.5z"/></svg> JUGAR</button>
       <div class="hint"><kbd>&larr;</kbd><kbd>&rarr;</kbd> elegir &nbsp;&middot;&nbsp; <kbd>ENTER</kbd> jugar</div>
     </div>
 
@@ -113,20 +164,20 @@
   </div>
 
   <!-- Poderes -->
-  <div id="powerHud"><div class="ph-ring"><span id="phIcon">&#9889;</span></div><div class="ph-txt"><b id="phName">PODER</b><small id="phState">LISTO &middot; tecla K</small></div></div>
+  <div id="powerHud"><div class="ph-ring"><span id="phIcon"></span></div><div class="ph-txt"><b id="phName">PODER</b><small id="phState">LISTO &middot; tecla K</small></div></div>
   <div id="powerFlash"></div>
   <div id="powerBanner"><span id="pbIcon"></span><span id="pbName"></span></div>
   <div id="sprintFx"><span>TO DO</span><span>DOING</span><span>DONE</span><b id="sprintT"></b></div>
 
   <!-- Jefe -->
-  <div id="bossBar"><span>&#9760; BUG REY</span><div class="bb"><i id="bossFill"></i></div></div>
+  <div id="bossBar"><span>BUG REY</span><div class="bb"><i id="bossFill"></i></div></div>
 
   <!-- Gloria al terminar un mundo -->
   <div id="glory">
     <div class="g-rays"></div>
     <div id="confetti"></div>
     <div class="g-card">
-      <div class="g-trophy">&#127942;</div>
+      <div class="g-trophy"><svg width="84" height="84" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v5a5 5 0 0 1-10 0z" fill="currentColor" fill-opacity=".25"/><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/><path d="M12 14v4M8 21h8M9 18h6"/></svg></div>
       <div class="g-title" id="gTitle">&iexcl;MUNDO 1 COMPLETADO!</div>
       <div class="g-sub" id="gSub">Yamboró quedó libre de bugs</div>
       <div class="g-who"><img id="gPortrait" alt=""><b id="gChar">DIEGO</b></div>
@@ -136,45 +187,45 @@
         <div><small>VIDAS</small><b id="gLives">0</b></div>
       </div>
       <div class="g-bonus" id="gBonus">BONO +5000 &middot; +1 VIDA</div>
-      <button id="gBtn">CONTINUAR &#9654;</button>
+      <button id="gBtn">CONTINUAR</button>
     </div>
   </div>
 
   <!-- Controles táctiles (solo en celular) -->
   <div id="touch">
-    <div id="tPad"><div class="arr l">&#9664;</div><div class="arr r">&#9654;</div><div class="arr u">&#9650;</div><div class="arr d">&#9660;</div><div id="tKnob"></div></div>
+    <div id="tPad"><div class="arr l"></div><div class="arr r"></div><div class="arr u"></div><div class="arr d"></div><div id="tKnob"></div></div>
     <div id="tBtns">
       <button class="tb tb-b" data-key="ShiftLeft">B<small>correr</small></button>
-      <button class="tb tb-j" data-key="KeyJ">&#128074;</button>
+      <button class="tb tb-j" data-key="KeyJ">G<small>golpe</small></button>
       <button class="tb tb-a" data-key="Space">A<small>saltar</small></button>
-      <button class="tb tb-p" id="tPow" data-key="KeyK"><span id="tPowIcon">&#9889;</span><small>poder</small></button>
+      <button class="tb tb-p" id="tPow" data-key="KeyK"><span id="tPowIcon"></span><small>poder</small></button>
     </div>
     <div id="tTop">
-      <button class="ts" data-key="Escape">&#10074;&#10074;</button>
-      <button class="ts" id="tFull">&#x26F6;</button>
-      <button class="ts" id="tGear" aria-label="Ajustes">&#9881;</button>
+      <button class="ts" data-key="Escape" aria-label="Pausa"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+      <button class="ts" id="tFull" aria-label="Pantalla completa"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button class="ts" id="tGear" aria-label="Ajustes"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
     </div>
   </div>
   <!-- Ajustes de controles (celular) -->
   <div id="tSettings">
     <div class="ts-card">
-      <div class="ts-title">&#9881; AJUSTES DE CONTROLES</div>
+      <div class="ts-title">AJUSTES DE CONTROLES</div>
       <label>Tamaño de la cruceta <b id="vPad">100%</b><input type="range" id="sPad" min="60" max="160" step="5"></label>
       <label>Tamaño de los botones <b id="vBtn">100%</b><input type="range" id="sBtn" min="60" max="160" step="5"></label>
       <label>Transparencia <b id="vOp">88%</b><input type="range" id="sOp" min="25" max="100" step="5"></label>
       <label class="chk"><input type="checkbox" id="sVib"> Vibrar al tocar</label>
       <label class="chk"><input type="checkbox" id="sSwap"> Zurdo (cruceta a la derecha)</label>
       <div class="ts-row">
-        <button id="sMove" class="big">&#9995; MOVER CONTROLES</button>
+        <button id="sMove" class="big">MOVER CONTROLES</button>
       </div>
       <div class="ts-row">
         <button id="sReset">Restablecer</button>
-        <button id="sClose" class="ok">LISTO &#10004;</button>
+        <button id="sClose" class="ok">LISTO</button>
       </div>
     </div>
   </div>
-  <div id="tEditBar"><span>Arrastra cada control adonde quieras</span><button id="sEditDone">GUARDAR &#10004;</button></div>
-  <div id="rotate"><div class="phone">&#128241;</div><b>Gira tu celular</b><span>SENA BROS se juega en horizontal</span></div>
+  <div id="tEditBar"><span>Arrastra cada control adonde quieras</span><button id="sEditDone">GUARDAR</button></div>
+  <div id="rotate"><div class="phone"></div><b>Gira tu celular</b><span>SENA BROS se juega en horizontal</span></div>
 
   <div id="wipe"></div>
   <div id="toast"></div>

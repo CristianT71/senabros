@@ -1,4 +1,4 @@
-// Cuentas, amigos y progreso en la nube (Supabase). Todo es opcional: si no hay conexión o no hay sesión,
+// Cuentas, amigos, retos y progreso en la nube (Supabase). Todo es opcional: si no hay conexión o no hay sesión,
 // el juego funciona igual con el progreso guardado en el navegador.
 (() => {
 'use strict';
@@ -8,9 +8,10 @@ const chip = $('acctChip'), modal = $('acctModal');
 if (!cfg || !lib || !chip) { if (chip) chip.style.display = 'none'; return; }
 
 const db = lib.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });
-const state = { user: null, profile: null, friends: [], incoming: [], outgoing: [], tab: 'login' };
+const state = { user: null, profile: null, friends: [], incoming: [], outgoing: [], challenges: [], tab: 'login', sub: 'friends', hasCode: true, preFriend: null };
 const USER_RE = /^[A-Za-z0-9_]{3,16}$/;
 const emailFor = u => u.toLowerCase() + '@' + cfg.emailDomain;
+const KINDS = { coins: 'Más monedas', kills: 'Más bugs derrotados', score: 'Más puntos', time_left: 'Más tiempo restante' };
 
 // ---------- utilidades ----------
 const el = (tag, props = {}, ...kids) => {
@@ -34,24 +35,28 @@ const ago = iso => {
   if (s < 150) return { on: true, text: 'conectado' };
   const m = s / 60; return { on: false, text: m < 60 ? `hace ${Math.round(m)} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d` };
 };
+function setMsg(text, good = false) { const m = $('acctMsg'); m.textContent = text || ''; m.className = good ? 'good' : ''; }
+const show = (id, on) => { $(id).hidden = !on; };
 
 // ---------- sesión y perfil ----------
+let loadingProfile = false;
 async function loadProfile() {
   if (loadingProfile) return; loadingProfile = true;
-  try { await loadProfileInner(); } finally { loadingProfile = false; }
+  try {
+    const { data: { session } } = await db.auth.getSession();
+    state.user = session ? session.user : null;
+    if (!state.user) { state.profile = null; return render(); }
+    const { data, error } = await db.from('profiles').select('id,username,player_code,character_name,last_seen,username_changed').eq('id', state.user.id).maybeSingle();
+    state.profile = error ? null : data;
+    render();
+    if (state.profile) { await syncDown(); await Promise.all([loadFriends(), loadChallenges(), loadRecoveryStatus()]); db.rpc('touch_presence'); }
+  } finally { loadingProfile = false; }
 }
-async function loadProfileInner() {
-  const { data: { session } } = await db.auth.getSession();
-  state.user = session ? session.user : null;
-  if (!state.user) { state.profile = null; return render(); }
-  const { data, error } = await db.from('profiles').select('id,username,player_code,character_name,last_seen,username_changed').eq('id', state.user.id).maybeSingle();
-  state.profile = error ? null : data;
-  render();
-  if (state.profile) { await syncDown(); loadFriends(); db.rpc('touch_presence'); }
-}
-let loadingProfile = false;
-db.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_IN' && !state.profile && !loadingProfile) loadProfile(); if (ev === 'SIGNED_OUT') { state.user = state.profile = null; state.friends = state.incoming = state.outgoing = []; render(); } });
-setInterval(() => { if (state.profile) db.rpc('touch_presence'); }, 60000);
+db.auth.onAuthStateChange((ev) => {
+  if (ev === 'SIGNED_IN' && !state.profile && !loadingProfile) loadProfile();
+  if (ev === 'SIGNED_OUT') { state.user = state.profile = null; state.friends = state.incoming = state.outgoing = state.challenges = []; render(); }
+});
+setInterval(() => { if (state.profile) { db.rpc('touch_presence'); loadFriends(); loadChallenges(); } }, 45000);
 
 // ---------- progreso en la nube ----------
 // Une lo local con lo de la nube sin perder nada: lo mejor de cada lado.
@@ -90,10 +95,10 @@ async function pushNow() {
   if (best > 0) patch.best_score = best;
   await db.from('game_progress').update(patch).eq('user_id', state.user.id);
 }
-window.SenaOnline = { queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(pushNow, 2500); }, get user() { return state.profile; } };
 
 // ---------- amigos ----------
 async function loadFriends() {
+  if (!state.user) return;
   const cols = 'id,username,player_code,character_name,last_seen';
   const { data, error } = await db.from('friendships').select(`id,status,requester_id,addressee_id,requester:profiles!friendships_requester_id_fkey(${cols}),addressee:profiles!friendships_addressee_id_fkey(${cols})`);
   if (error) return;
@@ -101,11 +106,11 @@ async function loadFriends() {
   state.friends = data.filter(f => f.status === 'accepted').map(f => ({ fid: f.id, ...(f.requester_id === me ? f.addressee : f.requester) }));
   state.incoming = data.filter(f => f.status === 'pending' && f.addressee_id === me).map(f => ({ fid: f.id, ...f.requester }));
   state.outgoing = data.filter(f => f.status === 'pending' && f.requester_id === me).map(f => ({ fid: f.id, ...f.addressee }));
-  renderFriends();
+  renderFriends(); renderChallengeForm(); updateBadges();
 }
 async function addFriend(id) {
   const { error } = await db.from('friendships').insert({ requester_id: state.user.id, addressee_id: id });
-  setMsg(error ? (error.code === '23505' ? 'Ya existe una solicitud o amistad con esa persona' : friendly(error)) : '¡Solicitud enviada!', !error);
+  setMsg(error ? (error.code === '23505' ? 'Ya existe una solicitud o amistad con esa persona' : friendly(error)) : 'Solicitud enviada', !error);
   await loadFriends(); $('fSearchOut').replaceChildren();
 }
 async function respond(fid, accept) {
@@ -113,39 +118,142 @@ async function respond(fid, accept) {
   if (error) setMsg(friendly(error)); await loadFriends();
 }
 
+// ---------- retos ----------
+async function loadChallenges() {
+  if (!state.user) return;
+  const cols = 'id,username,player_code';
+  const { data, error } = await db.from('challenges')
+    .select(`id,kind,world,level,status,creator_id,opponent_id,creator_result,opponent_result,created_at,expires_at,creator:profiles!challenges_creator_id_fkey(${cols}),opponent:profiles!challenges_opponent_id_fkey(${cols})`)
+    .order('created_at', { ascending: false }).limit(30);
+  if (error) return;
+  state.challenges = data; renderChallenges(); updateBadges();
+}
+const levelLabel = (w, l) => { const L = (window.SENA_LEVELS ? window.SENA_LEVELS() : []).find(x => x.world === w && x.level === l); return `${w}-${l}${L ? ' ' + L.name : ''}`; };
+function renderChallengeForm() {
+  const f = $('chFriend'), prev = f.value || state.preFriend;
+  f.replaceChildren(...(state.friends.length ? state.friends.map(x => el('option', { value: x.id }, x.username)) : [el('option', { value: '' }, 'Aún no tienes amigos')]));
+  if (prev && state.friends.some(x => x.id === prev)) f.value = prev;
+  const lv = $('chLevel'); if (!lv.children.length) {
+    const list = window.SENA_LEVELS ? window.SENA_LEVELS() : [];
+    lv.replaceChildren(...list.map(x => el('option', { value: `${x.world}-${x.level}` }, `${x.world}-${x.level}  ${x.name}`)));
+  }
+  $('chSend').disabled = !state.friends.length;
+}
+function challengeRow(c) {
+  const me = state.user.id, mineIsCreator = c.creator_id === me;
+  const other = mineIsCreator ? c.opponent : c.creator;
+  const mine = mineIsCreator ? c.creator_result : c.opponent_result, theirs = mineIsCreator ? c.opponent_result : c.creator_result;
+  const expired = c.status !== 'finished' && new Date(c.expires_at) < new Date();
+  const head = el('div', { class: 'pinfo' }, el('b', {}, `${mineIsCreator ? 'Reto a' : 'Reto de'} ${other ? other.username : '?'}`),
+    el('small', {}, `${KINDS[c.kind]} - nivel ${levelLabel(c.world, c.level)}`));
+  const acts = []; let status = '';
+  if (expired) status = 'Vencido';
+  else if (c.status === 'pending') {
+    if (mineIsCreator) { status = 'Esperando respuesta'; acts.push(el('button', { class: 'mini', onclick: () => cancelChallenge(c.id) }, 'Cancelar')); }
+    else acts.push(el('button', { class: 'mini ok', onclick: () => answerChallenge(c.id, true) }, 'Aceptar'), el('button', { class: 'mini', onclick: () => answerChallenge(c.id, false) }, 'Rechazar'));
+  } else if (c.status === 'active') {
+    if (mine == null) acts.push(el('button', { class: 'mini ok', onclick: () => playChallenge(c) }, 'Jugar'));
+    else status = `Tu resultado: ${mine}. Esperando a ${other ? other.username : 'tu rival'}`;
+    if (mineIsCreator) acts.push(el('button', { class: 'mini', onclick: () => cancelChallenge(c.id) }, 'Cancelar'));
+  } else if (c.status === 'finished') {
+    const win = mine > theirs, tie = mine === theirs;
+    status = `${tie ? 'Empate' : win ? 'Ganaste' : 'Perdiste'}: tú ${mine} - ${other ? other.username : 'rival'} ${theirs}`;
+  } else if (c.status === 'declined') status = 'Rechazado';
+  const row = el('div', { class: 'prow col' }, el('div', { class: 'prow in' }, head, el('div', { class: 'pact' }, acts)));
+  if (status) row.append(el('div', { class: 'cstatus' + (c.status === 'finished' ? (mine > theirs ? ' win' : mine < theirs ? ' lose' : '') : '') }, status));
+  return row;
+}
+function renderChallenges() {
+  const list = state.challenges, box = $('chList');
+  box.replaceChildren(...(list.length ? [el('div', { class: 'ptitle' }, 'Tus retos'), ...list.map(challengeRow)] : [el('div', { class: 'pempty' }, 'Todavía no tienes retos. Elige un amigo, un nivel y qué cuenta para ganar.')]));
+}
+async function sendChallenge() {
+  const opp = $('chFriend').value, kind = $('chKind').value, [w, l] = $('chLevel').value.split('-').map(Number);
+  if (!opp) return setMsg('Primero agrega a un amigo');
+  $('chSend').disabled = true;
+  const { error } = await db.rpc('create_challenge', { opponent: opp, kind, world: w, level: l });
+  $('chSend').disabled = false;
+  setMsg(error ? friendly(error) : 'Reto enviado', !error); await loadChallenges();
+}
+async function answerChallenge(id, accept) { const { error } = await db.rpc('respond_challenge', { challenge: id, accept }); if (error) setMsg(friendly(error)); await loadChallenges(); }
+async function cancelChallenge(id) { if (!confirm('¿Cancelar este reto?')) return; const { error } = await db.rpc('cancel_challenge', { challenge: id }); if (error) setMsg(friendly(error)); await loadChallenges(); }
+function playChallenge(c) {
+  const other = c.creator_id === state.user.id ? c.opponent : c.creator;
+  if (window.SENA_PLAY_CHALLENGE && SENA_PLAY_CHALLENGE({ id: c.id, kind: c.kind, world: c.world, level: c.level, rival: other ? other.username : '' })) modal.classList.remove('show');
+}
+// el juego llama a esto al terminar un nivel de reto
+async function submitChallenge(id, value) {
+  const { error } = await db.rpc('submit_challenge_result', { challenge: id, result: Math.max(0, Math.min(10000000, Math.round(value))) });
+  await loadChallenges(); return error ? friendly(error) : '';
+}
+
+// ---------- código de recuperación ----------
+async function loadRecoveryStatus() {
+  const { data } = await db.rpc('has_recovery_code'); state.hasCode = data !== false;
+  show('recAlert', !state.hasCode);
+  $('recStatus').textContent = state.hasCode ? 'Tienes un código activo. Si generas uno nuevo, el anterior deja de servir.' : 'No tienes código de recuperación. Sin él no podrás recuperar tu contraseña si la olvidas.';
+  $('recGen').textContent = state.hasCode ? 'Generar código nuevo' : 'Generar código';
+  updateBadges();
+}
+async function generateCode() {
+  if (state.hasCode && !confirm('Se generará un código nuevo y el anterior dejará de funcionar. ¿Continuar?')) return;
+  const { data, error } = await db.rpc('create_recovery_code');
+  if (error) return setMsg(friendly(error));
+  showCode(data); loadRecoveryStatus();
+}
+function showCode(code) {
+  $('codeText').textContent = code; show('acctOut', false); show('acctIn', false); show('acctCode', true); setMsg('');
+}
+function updateBadges() {
+  const meId = state.user && state.user.id, pending = state.incoming.length, toPlay = state.challenges.filter(c => {
+    const mine = c.creator_id === meId ? c.creator_result : c.opponent_result, exp = new Date(c.expires_at) < new Date();
+    return !exp && ((c.status === 'pending' && c.opponent_id === meId) || (c.status === 'active' && mine == null));
+  }).length;
+  const b = $('chBadge'); b.hidden = toPlay === 0; b.textContent = toPlay;
+  chip.classList.toggle('alert', !!state.profile && (pending + toPlay > 0 || !state.hasCode));
+}
+
 // ---------- interfaz ----------
-function setMsg(text, good = false) { const m = $('acctMsg'); m.textContent = text || ''; m.className = good ? 'good' : ''; }
 function render() {
   const p = state.profile;
-  chip.textContent = p ? `👤 ${p.username}` : '👤 Entrar / Crear cuenta';
+  chip.textContent = p ? p.username : 'Entrar / Crear cuenta';
   chip.title = p ? `Tu ID: ${p.player_code}` : 'Guarda tu progreso y juega con amigos';
-  $('acctOut').hidden = !!p; $('acctIn').hidden = !p;
+  const codeOpen = !$('acctCode').hidden;
+  show('acctOut', !p && !codeOpen); show('acctIn', !!p && !codeOpen);
   if (p) {
     $('meName').textContent = p.username; $('meCode').textContent = p.player_code; $('meRename').hidden = !!p.username_changed;
-    renderFriends();
+    renderFriends(); renderChallenges(); setSub(state.sub);
   } else {
     $('tabLogin').classList.toggle('on', state.tab === 'login'); $('tabSignup').classList.toggle('on', state.tab === 'signup');
     $('acctGo').textContent = state.tab === 'login' ? 'ENTRAR' : 'CREAR CUENTA';
     $('acctPass').autocomplete = state.tab === 'login' ? 'current-password' : 'new-password';
     $('acctHint').textContent = state.tab === 'signup' ? 'Elige un usuario de 3 a 16 letras, números o _. Será tu nombre público.' : '';
+    show('acctForgot', state.tab === 'login');
   }
+  updateBadges();
+}
+function setSub(name) {
+  state.sub = name;
+  for (const [id, key] of [['stFriends', 'friends'], ['stChallenges', 'challenges'], ['stSecurity', 'security']]) $(id).classList.toggle('on', key === name);
+  show('secFriends', name === 'friends'); show('secChallenges', name === 'challenges'); show('secSecurity', name === 'security');
+  if (name === 'challenges') renderChallengeForm();
 }
 function personRow(f, actions) {
   const a = ago(f.last_seen);
   return el('div', { class: 'prow' },
     el('div', { class: 'pdot' + (a.on ? ' on' : '') }),
-    el('div', { class: 'pinfo' }, el('b', {}, f.username), el('small', {}, `${f.player_code} · ${a.text}`)),
+    el('div', { class: 'pinfo' }, el('b', {}, f.username), el('small', {}, `${f.player_code} - ${a.text}`)),
     el('div', { class: 'pact' }, actions));
 }
 function renderFriends() {
   const sec = (title, rows) => rows.length ? [el('div', { class: 'ptitle' }, title), ...rows] : [];
+  const retar = f => el('button', { class: 'mini ok', onclick: () => { state.preFriend = f.id; setSub('challenges'); $('chFriend').value = f.id; } }, 'Retar');
   $('fList').replaceChildren(
     ...sec(`Solicitudes recibidas (${state.incoming.length})`, state.incoming.map(f => personRow(f, [
       el('button', { class: 'mini ok', onclick: () => respond(f.fid, true) }, 'Aceptar'), el('button', { class: 'mini', onclick: () => respond(f.fid, false) }, 'Rechazar')]))),
-    ...sec(`Amigos (${state.friends.length})`, state.friends.map(f => personRow(f, [el('button', { class: 'mini', onclick: () => { if (confirm(`¿Quitar a ${f.username} de tus amigos?`)) respond(f.fid, false); } }, 'Quitar')]))),
+    ...sec(`Amigos (${state.friends.length})`, state.friends.map(f => personRow(f, [retar(f), el('button', { class: 'mini', onclick: () => { if (confirm(`¿Quitar a ${f.username} de tus amigos?`)) respond(f.fid, false); } }, 'Quitar')]))),
     ...sec('Solicitudes enviadas', state.outgoing.map(f => personRow(f, [el('button', { class: 'mini', onclick: () => respond(f.fid, false) }, 'Cancelar')]))),
     ...(state.friends.length + state.incoming.length + state.outgoing.length ? [] : [el('div', { class: 'pempty' }, 'Aún no tienes amigos. Búscalos por usuario o por su ID (SB-XXXXXX).')]));
-  chip.classList.toggle('alert', state.incoming.length > 0);
 }
 async function search() {
   const q = $('fSearch').value.trim(); const out = $('fSearchOut');
@@ -163,19 +271,38 @@ async function submit(e) {
   if (pw.length < 6) return setMsg('La contraseña debe tener mínimo 6 caracteres');
   btn.disabled = true; setMsg('Un momento...', true);
   try {
+    let newCode = null;
     if (state.tab === 'signup') {
       const { data: free, error: e1 } = await db.rpc('username_available', { name: u });
       if (e1) throw e1; if (!free) throw { message: 'Ese usuario ya existe' };
       const { data, error } = await db.auth.signUp({ email: emailFor(u), password: pw, options: { data: { username: u } } });
       if (error) throw error;
       if (!data.session) throw { message: 'Cuenta creada, pero el servidor pide confirmar el correo. Avisa al administrador.' };
+      const r = await db.rpc('create_recovery_code'); if (!r.error) newCode = r.data;
     } else {
       const { error } = await db.auth.signInWithPassword({ email: emailFor(u), password: pw });
       if (error) throw error;
     }
-    setMsg(''); $('acctPass').value = ''; await loadProfile();
+    setMsg(''); $('acctPass').value = '';
+    if (newCode) showCode(newCode);       // se muestra una sola vez, antes de entrar al perfil
+    await loadProfile();
     if (window.SenaOnline) SenaOnline.queueSave();
   } catch (err) { setMsg(friendly(err)); } finally { btn.disabled = false; }
+}
+async function recover(e) {
+  e.preventDefault();
+  const u = $('rcUser').value.trim(), code = $('rcCode').value.trim(), pw = $('rcPass').value, btn = $('rcGo');
+  if (!USER_RE.test(u)) return setMsg('Usuario inválido');
+  if (pw.length < 6) return setMsg('La contraseña nueva debe tener mínimo 6 caracteres');
+  btn.disabled = true; setMsg('Un momento...', true);
+  const { data, error } = await db.rpc('recover_password', { uname: u, code, new_password: pw });
+  btn.disabled = false;
+  if (error) return setMsg(friendly(error));
+  if (data === 'locked') return setMsg('Demasiados intentos fallidos. Espera 15 minutos');
+  if (data !== 'ok') return setMsg('Usuario o código incorrecto');
+  state.tab = 'login'; $('acctUser').value = u; $('acctPass').value = ''; $('rcPass').value = ''; $('rcCode').value = '';
+  show('acctRecover', false); show('acctMain', true); render();
+  setMsg('Contraseña cambiada. Ya puedes entrar. Después genera un código nuevo en Seguridad.', true);
 }
 async function deleteAccount() {
   if (!confirm('¿Borrar tu cuenta para siempre? Se pierden tu usuario, tus amigos y tu progreso en la nube.')) return;
@@ -183,16 +310,32 @@ async function deleteAccount() {
   await db.auth.signOut(); setMsg('Cuenta borrada', true); render();
 }
 
-chip.onclick = () => { modal.classList.add('show'); setMsg(''); if (state.profile) loadFriends(); };
+// ---------- eventos ----------
+const openModal = sub => { modal.classList.add('show'); setMsg(''); if (state.profile) { setSub(sub || state.sub); loadFriends(); loadChallenges(); loadRecoveryStatus(); } };
+chip.onclick = () => openModal();
 $('acctClose').onclick = () => modal.classList.remove('show');
 modal.addEventListener('pointerdown', e => { if (e.target === modal) modal.classList.remove('show'); });
 addEventListener('keydown', e => { if (e.code === 'Escape' && modal.classList.contains('show')) modal.classList.remove('show'); });
 $('tabLogin').onclick = () => { state.tab = 'login'; setMsg(''); render(); };
 $('tabSignup').onclick = () => { state.tab = 'signup'; setMsg(''); render(); };
 $('acctForm').addEventListener('submit', submit);
+$('acctForgot').onclick = () => { setMsg(''); $('rcUser').value = $('acctUser').value; show('acctMain', false); show('acctRecover', true); };
+$('rcBack').onclick = () => { setMsg(''); show('acctRecover', false); show('acctMain', true); };
+$('acctRecover').addEventListener('submit', recover);
+$('codeCopy').onclick = () => { navigator.clipboard?.writeText($('codeText').textContent); setMsg('Código copiado', true); };
+$('codeDownload').onclick = () => {
+  const blob = new Blob([`SENA Bros - código de recuperación\nUsuario: ${state.profile ? state.profile.username : ''}\nCódigo: ${$('codeText').textContent}\n\nGuárdalo en un lugar seguro. Sirve una sola vez.\n`], { type: 'text/plain' });
+  const a = el('a', { href: URL.createObjectURL(blob), download: 'senabros-recuperacion.txt' }); document.body.append(a); a.click(); a.remove();
+};
+$('codeDone').onclick = () => { show('acctCode', false); $('codeText').textContent = '----'; render(); };
 $('acctLogout').onclick = async () => { await db.auth.signOut(); modal.classList.remove('show'); };
 $('acctDelete').onclick = deleteAccount;
+$('recGen').onclick = generateCode; $('recAlertGo').onclick = generateCode;
+$('stFriends').onclick = () => setSub('friends'); $('stChallenges').onclick = () => { setSub('challenges'); loadChallenges(); }; $('stSecurity').onclick = () => setSub('security');
+$('chSend').onclick = sendChallenge; $('chRefresh').onclick = loadChallenges;
 $('fGo').onclick = search;
+$('fSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
+$('meCopy').onclick = () => { navigator.clipboard?.writeText($('meCode').textContent); setMsg('ID copiado', true); };
 $('acctGoogle').onclick = async () => {
   const btn = $('acctGoogle'); btn.disabled = true; setMsg('Abriendo Google...', true);
   const { error } = await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
@@ -204,10 +347,14 @@ $('meRename').onclick = async () => {
   if (!USER_RE.test(n)) return setMsg('Usuario inválido: 3 a 16 letras, números o _');
   const { error } = await db.rpc('change_username', { new_name: n });
   if (error) return setMsg(friendly(error));
-  setMsg('¡Usuario cambiado!', true); await loadProfile();
+  setMsg('Usuario cambiado', true); await loadProfile();
 };
-$('fSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
-$('meCopy').onclick = () => { navigator.clipboard?.writeText($('meCode').textContent); setMsg('ID copiado', true); };
 
+window.SenaOnline = {
+  queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(pushNow, 2500); },
+  get user() { return state.profile; },
+  submitChallenge,
+  openChallenges() { openModal('challenges'); },
+};
 render(); loadProfile();
 })();
