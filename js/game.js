@@ -466,7 +466,7 @@ function buildLevel() {
 }
 
 // Fondo 2D con parallax (plano lejano que se mueve más lento que el nivel). Cada nivel tiene su imagen;
-// las de los niveles 1-2..1-6 están en bg/<nombre>.js y se cargan solo cuando hacen falta.
+// las de los niveles 1-2..1-6 están en assets/fondos/<nombre>.js y se cargan solo cuando hacen falta.
 const BG = { Z: -25, H: 34, PARALLAX: 0.93, mesh: null, key: '', tex: {} };
 function setBackdrop(key) {
   BG.key = key;
@@ -483,7 +483,7 @@ function setBackdrop(key) {
   if (key === 'yamboro') return load(window.BG_YAMBORO);
   if (PROC_BG[key]) return load(drawBackdrop(key));
   if (window.BG_IMG && window.BG_IMG[key]) return load(window.BG_IMG[key]);
-  const sc = document.createElement('script'); sc.src = 'bg/' + key + '.js';
+  const sc = document.createElement('script'); sc.src = 'assets/fondos/' + key + '.js';
   sc.onload = () => load(window.BG_IMG[key]);
   document.head.appendChild(sc);
 }
@@ -1697,7 +1697,7 @@ function update(dt) {
 function b64ToBuf(b) { const s = atob(b); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; }
 const loader = new T.GLTFLoader();
 const parseGLB = b64 => new Promise((res, rej) => loader.parse(b64ToBuf(b64), '', res, rej));
-// ---------- Selección de personaje (cada uno se carga bajo demanda desde chars/<archivo>.js) ----------
+// ---------- Selección de personaje (cada uno se carga bajo demanda desde assets/personajes/<archivo>.js) ----------
 const CHARS = [['Diego', 'Diego'], ['Wilson', 'Wilson'], ['Juan', 'Juan'], ['Carlos', 'Carlos'],
                ['Intructor', 'Instructor'], ['Jhonny', 'Jhonny'], ['Fabian', 'Fabian']];
 let charIdx = 0, charLoading = false;
@@ -1706,8 +1706,8 @@ const charNameEl = document.getElementById('charName'), charDotsEl = document.ge
 function loadCharScript(file) {
   return new Promise((res, rej) => {
     if (window.CHAR_GLB && window.CHAR_GLB[file]) return res();
-    const s = document.createElement('script'); s.src = 'chars/' + file + '.js';
-    s.onload = () => res(); s.onerror = () => rej(new Error('No se pudo cargar chars/' + file + '.js'));
+    const s = document.createElement('script'); s.src = 'assets/personajes/' + file + '.js';
+    s.onload = () => res(); s.onerror = () => rej(new Error('No se pudo cargar assets/personajes/' + file + '.js'));
     document.body.appendChild(s);
   });
 }

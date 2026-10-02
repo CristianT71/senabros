@@ -1,15 +1,6 @@
-# Modelos originales de Tripo (el juego usa las versiones optimizadas de chars/ y enemies_data.js)
-*.glb
-enemies_opt/
-
-# Versiones viejas que ya no se cargan
-player_data.js
-
-# Imágenes originales en alta resolución (el juego usa bg_data.js y bg/*.js)
-fondo_2d_yamboro_v1.png
-fondo_yamboro.jpg
-nivel_*.png
-portraits/
+# Archivos originales (modelos de Tripo, imágenes en alta resolución, retratos):
+# se guardan en el PC para editarlos en Blender, pero el juego no los usa.
+fuentes/
 
 # Sistema
 .DS_Store
