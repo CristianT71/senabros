@@ -444,7 +444,7 @@ function buildLevel() {
   // monedas
   L.coins.forEach(([a, b, y]) => { for (let x = a; x <= b; x++) if (!grid[x] || !grid[x][y]) addCoin(x + 0.5, y + 0.5); });
   // enemigos
-  L.enemies.forEach(([x, y, type]) => addEnemy(x + 0.5, y, type));
+  L.enemies.forEach(([x, y, type], i) => { addEnemy(x + 0.5, y, type); enemies[enemies.length - 1].uid = i; });
   // bandera
   flag = new T.Group();
   const pole = new T.Mesh(new T.CylinderGeometry(0.07, 0.07, 9, 12), new T.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.6, roughness: 0.3 }));
@@ -735,7 +735,7 @@ function updateBoss(e, dt) {
   if (!p.dead && game.state === 'play' && Math.abs(e.x - p.x) < e.hw + p.hw && p.y < e.y + e.h && p.y + p.h > e.y) {
     if (p.vy < 0 && p.y > e.y + e.h * 0.5) {
       if (e.inv <= 0) {
-        e.hp--; e.inv = 1.4; SFX.bosshit(); shake = 0.5; spawnFrag(e.x, e.y + e.h, MAT.stone, 8, 6);
+        e.hp--; e.inv = 1.4; SFX.bosshit(); shake = 0.5; spawnFrag(e.x, e.y + e.h, MAT.stone, 8, 6); net('boss', { hp: e.hp });
         if (e.hp <= 0) { killEnemy(e, 'boss'); bossDefeated(); }
         else toast(e.hp === 1 ? '¡UNO MÁS!' : '¡BIEN!', 800);
       }
@@ -892,8 +892,10 @@ const overlay = document.getElementById('overlay'), overlayText = document.getEl
 let toastTimer = 0;
 function toast(t, ms = 1500) { toastEl.textContent = t; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms); }
 
-function addScore(n) { game.score += n; }
-function addCoinCount() { game.coins++; addScore(200); addEnergy(1); missionProgress('coins'); SFX.coin(); if (game.coins % 50 === 0) { game.lives++; SFX.oneup(); toast('1-UP!'); } }
+let netMute = false;   // true mientras se aplica un evento de otro jugador (no da puntos ni misiones)
+function net(type, payload) { if (game.mp && !netMute && window.SENA_NET) window.SENA_NET.send(type, payload); }
+function addScore(n) { if (netMute) return; game.score += n; }
+function addCoinCount() { if (netMute) return; game.coins++; addScore(200); addEnergy(1); missionProgress('coins'); SFX.coin(); if (game.coins % 50 === 0) { game.lives++; SFX.oneup(); toast('1-UP!'); } }
 
 function resetPlayer(x) {
   Object.assign(player, { x, y: 2, vx: 0, vy: 0, facing: 1, grounded: false, crouch: false, pound: false, punchT: 0, landT: 0, dead: false, deadT: 0, invT: 1.2, rot: 0,
@@ -927,6 +929,7 @@ function transition(fn) {
   }, 460);
 }
 function completeLevel() {
+  if (game.mp) { if (window.SenaMP) SenaMP.levelDone({ coins: game.coins, kills: game.runKills || 0, score: game.score }); return; }
   if (game.challenge) { finishChallenge(); return; }
   recordBest();
   const w = game.world, n = game.level + 1, pg = game.progress;
@@ -936,6 +939,130 @@ function completeLevel() {
   if (n === WORLDS[w].count) startGlory();          // último nivel del mundo: ¡gloria!
   else transition(() => showMap({ banner: true, cleared: n }));
 }
+
+// ================= Multijugador: otros jugadores en el nivel =================
+// La red la maneja js/multiplayer.js (Supabase Realtime). Aquí solo se dibujan los demás y se aplican sus eventos.
+const remotes = new Map();
+const REMOTE_ONCE = new Set(['M_Jump', 'M_Land', 'M_Punch', 'M_Death', 'M_Victory', 'M_GroundPound', 'M_Crouch']);
+function remotePlay(r, name, speed = 1) {
+  const a = r.actions[name]; if (!a) return;
+  if (r.curName === name) { a.timeScale = speed; return; }
+  const loop = !REMOTE_ONCE.has(name);
+  a.reset(); a.enabled = true; a.setLoop(loop ? T.LoopRepeat : T.LoopOnce, Infinity); a.clampWhenFinished = true; a.timeScale = speed;
+  if (r.cur && r.cur !== a) a.crossFadeFrom(r.cur, 0.12, false);
+  a.play(); r.cur = a; r.curName = name;
+}
+async function ensureRemote(uid, name, file) {
+  let r = remotes.get(uid);
+  if (r && r.file === file) return r;
+  if (r) removeRemote(uid);
+  r = { uid, name, file, model: null, x: 3, y: 2, tx: 3, ty: 2, vx: 0, vy: 0, facing: 1, rot: 0, tilt: 0, sc: 1, anim: 'M_Idle', speed: 1, last: 0, dead: false, has: false };
+  remotes.set(uid, r);
+  try {
+    const g = await getChar(file);
+    if (remotes.get(uid) !== r) return r;   // se fue mientras cargaba
+    const m = T.SkeletonUtils.clone(g.scene);
+    m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    r.model = m; r.mixer = new T.AnimationMixer(m); r.actions = {}; r.cur = null; r.curName = '';
+    g.animations.filter(c => c.name.startsWith('M_')).forEach(c => { r.actions[c.name] = r.mixer.clipAction(c); });
+    r.tag = textSprite(name, '#ffd23f', 0.55); r.tag.material.depthTest = true;
+    scene.add(m); scene.add(r.tag); m.visible = r.tag.visible = r.has;
+    remotePlay(r, r.anim, r.speed);
+  } catch (err) { console.error('no se pudo cargar el modelo de', name, err); }
+  return r;
+}
+function removeRemote(uid) {
+  const r = remotes.get(uid); if (!r) return;
+  if (r.model) scene.remove(r.model); if (r.tag) scene.remove(r.tag);
+  if (r.mixer) r.mixer.stopAllAction();
+  remotes.delete(uid);
+}
+function updateRemotes(dt) {
+  const show = !!game.mp && (game.state === 'play' || game.state === 'win' || game.state === 'won');
+  const now = performance.now();
+  remotes.forEach(r => {
+    if (!r.model) return;
+    const vis = show && r.has && now - r.last < 6000;   // si deja de enviar 6 s, se oculta
+    r.model.visible = r.tag.visible = vis;
+    if (!vis) return;
+    // extrapolación corta con su velocidad + suavizado hacia la posición recibida
+    const age = Math.min(0.25, (now - r.last) / 1000);
+    const px = r.tx + r.vx * age, py = r.ty + (r.dead ? 0 : r.vy * age);
+    const k = Math.min(1, dt * 14);
+    r.x += (px - r.x) * k; r.y += (py - r.y) * k;
+    if (Math.abs(px - r.x) > 4 || Math.abs(py - r.y) > 4) { r.x = px; r.y = py; }   // salto grande (reaparición)
+    const target = r.facing > 0 ? 0 : -Math.PI; r.rot += (target - r.rot) * Math.min(1, dt * 14);
+    const hh = 0.5 * r.sc * 0.95, fs = r.facing > 0 ? 1 : -1;
+    r.model.position.set(r.x + fs * hh * Math.sin(r.tilt), r.y + hh - hh * Math.cos(r.tilt), -0.35);
+    r.model.rotation.set(0, r.rot, r.tilt); r.model.scale.setScalar(r.sc);
+    r.tag.position.set(r.x, r.y + 1.55 * r.sc + 0.35, 0.4);
+    r.mixer.update(dt);
+  });
+}
+function applyRemoteState(uid, st) {
+  const r = remotes.get(uid); if (!r) return;
+  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d;
+  r.last = performance.now();
+  if (!r.has) { r.has = true; r.x = st.x; r.y = st.y; }
+  if (st.a && r.model && (st.a !== r.curName || Math.abs((st.s || 1) - (r.cur ? r.cur.timeScale : 1)) > 0.05)) remotePlay(r, st.a, st.s || 1);
+  r.anim = st.a || r.anim; r.speed = st.s || 1;
+}
+function applyRemoteEvent(uid, name, type, p) {
+  if (!game.mp || !levelGroup) return;
+  netMute = true;
+  try {
+    if (type === 'kill') {
+      const e = enemies.find(q => q.uid === p.u && q.alive);
+      if (e) killEnemy(e, p.h ? 'stomp' : 'flip');
+    } else if (type === 'block') {
+      const c = grid[p.x] && grid[p.x][p.y];
+      if (c === '?' || c === 'M' || c === 'B') hitBlock(p.x, p.y, true);
+    } else if (type === 'coin') {
+      const c = coins[p.i]; if (c && !c.taken) { c.taken = true; levelGroup.remove(c.m); }
+    } else if (type === 'boss') {
+      const e = bossE;
+      if (e && e.alive && p.hp < e.hp) {
+        e.hp = p.hp; e.inv = 1.4; SFX.bosshit(); shake = 0.4;
+        if (e.hp <= 0) { killEnemy(e, 'boss'); bossDefeated(); }
+      }
+    } else if (type === 'finish') {
+      if (game.state === 'play' && !player.dead) { toast(name + ' llegó a la meta', 2200); netMute = false; startWin(true); }
+    }
+  } finally { netMute = false; }
+}
+function localNetState() {
+  if (!game.mp || !model || !(game.state === 'play' || game.state === 'win' || game.state === 'won')) return null;
+  const r2 = v => Math.round(v * 100) / 100;
+  return { x: r2(player.x), y: r2(player.y), vx: r2(player.vx), vy: r2(player.vy), f: player.facing, a: curName, s: r2(cur ? cur.timeScale : 1),
+    d: player.dead ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x) };
+}
+function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}], me }
+  stopMP();
+  game.mp = { me: opts.me };
+  opts.players.filter(q => q.uid !== opts.me).forEach(q => ensureRemote(q.uid, q.name, q.char));
+  Object.assign(game, { score: 0, coins: 0, lives: 3, energy: 0, challenge: null });
+  game.world = opts.world - 1; MAPN = WORLDS[game.world].nodes;
+  startLevel(opts.level - 1);
+  worldLabel.textContent = 'EN LINEA';
+}
+function stopMP() {
+  [...remotes.keys()].forEach(removeRemote);
+  game.mp = null;
+}
+window.SENA_MP = {
+  start: o => { startMP(o); },
+  stop: stopMP,
+  state: localNetState,
+  apply: applyRemoteState,
+  event: applyRemoteEvent,
+  join: (uid, name, char) => { if (game.mp) ensureRemote(uid, name, char); },
+  remove: removeRemote,
+  active: () => !!game.mp,
+  backToMenu: () => { stopMP(); showTitle(); },
+  levels: () => [0, 1].flatMap(w => Array.from({ length: WORLDS[w].count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name,
+    open: i <= game.progress.done[w] && (w === 0 || game.progress.done[0] >= WORLDS[0].count) || i === 0 && w === 0 }))),
+  char: () => CHARS[charIdx][0],
+};
 
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
@@ -1021,6 +1148,7 @@ function gloryContinue() {
 }
 document.getElementById('gBtn').onclick = gloryContinue;
 function showTitle(msg) {
+  if (game.mp && !(window.SenaMP && SenaMP.leaving)) stopMP();
   game.challenge = null;
   game.state = 'title'; setMap(false); setMenu(true);
   if (map.group) map.group.visible = false;
@@ -1034,7 +1162,7 @@ function showTitle(msg) {
 function die() {
   if (player.dead || game.state !== 'play') return;
   player.dead = true; player.deadT = 0; player.vx = 0; player.vy = 0; player.pound = false; player.facing = 1; player.rot = 0;
-  play('M_Death', { loop: false, fade: 0.05 }); SFX.die(); game.lives--; game.hurt = true;
+  play('M_Death', { loop: false, fade: 0.05 }); SFX.die(); if (!game.mp) game.lives--; game.hurt = true;
 }
 // recibir daño: si es grande se encoge, si es pequeño muere
 function damage() {
@@ -1056,7 +1184,8 @@ function afterDeath() {
     game.state = 'over';
   }
 }
-function startWin() {
+function startWin(fromNet) {
+  if (!fromNet) net('finish', {});
   game.state = 'win'; game.winT = 0; player.vx = 0; player.vy = 0; player.pound = false;
   player.x = FLAGX + 0.5 - 0.35; player.facing = 1;
   const bonus = Math.floor(player.y - 2) * 400 + 1000; addScore(bonus); toast('+' + bonus, 1200);
@@ -1069,13 +1198,15 @@ function startWin() {
 function killEnemy(e, how) {
   if (!e.alive) return;
   if (e.def.kind === 'boss' && how !== 'boss') return;   // al jefe solo se le vence pisándolo
+  if (e.uid != null && e.def.kind !== 'boss') net('kill', { u: e.uid, h: how === 'stomp' ? 1 : 0 });
   e.alive = false; e.deadT = 0; e.mode = how; addScore(e.def.score * (how === 'stomp' ? 1 : 2));
-  if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); game.runKills = (game.runKills || 0) + 1; }
+  if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); if (!netMute) game.runKills = (game.runKills || 0) + 1; }
   if (how === 'stomp') { SFX.stomp(); e.body.scale.y = 0.3 * e.def.scale; spawnFrag(e.x, e.y + 0.3, MAT.stone, 4, 3); }
   else { SFX.punch(); e.vy = 9; e.vx = player.facing * 3; e.mesh.rotation.z = Math.PI; }
 }
 function hitBlock(tx, ty, fromPlayer) {
   const c = grid[tx] && grid[tx][ty], key = tx + ',' + ty;
+  if (c === '?' || c === 'M' || (c === 'B' && fromPlayer)) net('block', { x: tx, y: ty });
   if (c === '?' || c === 'M') {
     grid[tx][ty] = 'U'; if (blockMesh[key]) blockMesh[key].material = MAT.used;
     bump(key);
@@ -1179,6 +1310,7 @@ const powerUnlocked = (id = curPowerId()) => !!pstat(id).unlocked;
 function savePowers() { if (!persist) return; try { localStorage.setItem('senabros_powers', JSON.stringify(powerData)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
 // suma progreso a la misión del instructor actual y lo desbloquea al cumplirla
 function missionProgress(stat, n = 1) {
+  if (netMute || game.mp) return;   // las misiones se cumplen jugando solo
   const id = curPowerId(), M = MISSIONS[id], d = pstat(id);
   if (d.unlocked || !M || M.stat !== stat) return;
   d[stat] = (d[stat] || 0) + n; savePowers();
@@ -1191,7 +1323,7 @@ function missionProgress(stat, n = 1) {
   } else if (M.goal > 1 && (d[stat] % Math.max(1, Math.floor(M.goal / 5)) === 0)) toast(`Misión: ${d[stat]}/${M.goal} ${M.unit}`, 900);
 }
 // energía: monedas +1, bugs +2, ladrillos +1
-function addEnergy(n) { game.energy = Math.min(ENERGY_MAX, (game.energy || 0) + n); }
+function addEnergy(n) { if (netMute) return; game.energy = Math.min(ENERGY_MAX, (game.energy || 0) + n); }
 const curPower = () => POWERS[curPowerId()];
 
 // --- efectos temporales: { obj, t, life, upd(obj, k, dt) -> true para terminar antes } ---
@@ -1264,7 +1396,7 @@ function hurtEnemy(e) {
   if (!e.alive) return false;
   if (e.def.kind === 'boss') {
     if (e.inv > 0) return false;
-    e.hp--; e.inv = 1.4; SFX.bosshit(); shake = 0.5;
+    e.hp--; e.inv = 1.4; SFX.bosshit(); shake = 0.5; net('boss', { hp: e.hp });
     if (e.hp <= 0) { killEnemy(e, 'boss'); bossDefeated(); } else toast(e.hp === 1 ? '¡UNO MÁS!' : '¡BIEN!', 800);
     return true;
   }
@@ -1453,7 +1585,7 @@ addEventListener('keydown', e => {
     if (e.code === 'ArrowDown' || e.code === 'KeyS') mapMove(0, 1);
     if (e.code === 'Enter' || e.code === 'Space') mapEnter();
     if (e.code === 'Escape') transition(() => showTitle());
-  } else if (e.code === 'Escape' && game.state === 'play') transition(() => showMap({ banner: false }));
+  } else if (e.code === 'Escape' && game.state === 'play') { if (game.mp) { if (window.SenaMP) SenaMP.leaveLevel(); } else transition(() => showMap({ banner: false })); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 const held = (...c) => c.some(k => keys[k]);
@@ -1570,7 +1702,7 @@ function updatePlayer(dt) {
 
   // monedas
   coins.forEach(c => {
-    if (!c.taken && Math.abs(c.x - p.x) < 0.65 && Math.abs(c.y - (p.y + 0.7)) < 1.0) { c.taken = true; levelGroup.remove(c.m); addCoinCount(); }
+    if (!c.taken && Math.abs(c.x - p.x) < 0.65 && Math.abs(c.y - (p.y + 0.7)) < 1.0) { c.taken = true; levelGroup.remove(c.m); addCoinCount(); net('coin', { i: coins.indexOf(c) }); }
   });
 }
 
@@ -1731,6 +1863,7 @@ function update(dt) {
   }
   const tnow = performance.now() / 1000;
   coins.forEach(c => { if (!c.taken) { c.m.rotation.y = tnow * 2.2 + c.ph; c.m.position.y = c.y + Math.sin(tnow * 3 + c.ph) * 0.08; } });
+  updateRemotes(dt);
   updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateSparks(dt); updatePfx(dt); updatePowerUI();
   if (MAT.lava.map) { MAT.lava.map.offset.x = tnow * 0.05; MAT.lava.map.offset.y = Math.sin(tnow * 0.7) * 0.04; MAT.lava.emissiveIntensity = 0.8 + Math.sin(tnow * 3) * 0.15; }
   if (flag) flag.userData.cloth.rotation.y = Math.sin(tnow * 3) * 0.15;
@@ -2178,7 +2311,8 @@ Promise.all(enemyEntries.map(([name, b64]) =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (/test=/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge };   // solo en modo prueba
+  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, get enemies() { return enemies; }, get player() { return player; },
+    remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
     if (tc) await selectChar(CHARS.findIndex(c => c[0] === tc[1]));

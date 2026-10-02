@@ -30,7 +30,8 @@ SenaBros/
 ├── js/
 │   ├── game.js             Motor del juego: niveles, física, enemigos, poderes, mapa, mundos
 │   ├── touch.js            Controles táctiles y ventana de ajustes (solo en celular)
-│   ├── online.js           Cuentas, amigos y progreso en la nube (Supabase)
+│   ├── online.js           Cuentas, amigos, retos y progreso en la nube (Supabase)
+│   ├── multiplayer.js      Salas en tiempo real (Supabase Realtime): presencia, posiciones y eventos
 │   └── config.js           URL y llave pública (anon) de Supabase
 ├── assets/                 Lo que carga el juego (modelos e imágenes en base64)
 │   ├── enemigos.js         Robot 404, Entrega Tardía, Archivo Corrupto, café y empanada
@@ -61,3 +62,12 @@ Agrega al final de la dirección:
   **Nunca** subas la llave `service_role` ni la contraseña de la base de datos.
 - En Supabase hay que tener **desactivado** *Authentication → Sign In / Providers → Email → Confirm email*
   (los correos son sintéticos, no se pueden confirmar).
+
+## Multijugador en tiempo real
+
+- Botón **EN LÍNEA** en el menú (requiere cuenta). El anfitrión crea una sala con un código de 5 letras; hasta 4 jugadores.
+- Se entra con el código o por invitación de un amigo conectado (llega como aviso arriba de la pantalla).
+- En el nivel cada jugador envía su posición y animación 10 veces por segundo; los demás lo ven con su instructor y su nombre.
+- Se sincronizan: bugs derrotados, bloques, monedas, golpes al jefe y la meta (si uno llega, gana todo el equipo). Sin vidas que perder.
+- Al terminar todos vuelven a la sala con la tabla de resultados.
+- Canales privados: solo jugadores con cuenta (políticas en `supabase/migrations/20261003000000_multijugador_realtime.sql`).

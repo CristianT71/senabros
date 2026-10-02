@@ -395,6 +395,11 @@ $('meRename').onclick = async () => {
 window.SenaOnline = {
   queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(pushNow, 2500); },
   get user() { return state.profile; },
+  get friends() { return state.friends; },
+  get isGuest() { return state.guest; },
+  db,
+  openAuth() { showScreen('auth'); },
+  refreshFriends: () => loadFriends(),
   submitChallenge,
   openChallenges() { openProfile('challenges'); },
 };
