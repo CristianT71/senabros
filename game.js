@@ -1823,7 +1823,8 @@ Promise.all(enemyEntries.map(([name, b64]) =>
   let last = performance.now();
   (function loop(now) {
     const dt = Math.min(0.033, (now - last) / 1000); last = now;
-    update(dt); renderer.render(scene, camera); requestAnimationFrame(loop);
+    if (!window.SENA_PAUSED) update(dt);   // pausado mientras se abren los ajustes
+    renderer.render(scene, camera); requestAnimationFrame(loop);
   })(last);
 }).catch(err => {
   document.getElementById('loading').textContent = 'Error cargando los modelos: ' + (err.message || err);

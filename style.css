@@ -306,7 +306,7 @@ body.touch .controls, body.touch .hint, body.touch #mapInfo .mk { display: none;
   #startBtn { padding: 8px 0; font-size: 20px; border-width: 3px; }
   .status { font-size: 12px; padding: 4px 8px; }
   #hud { padding: 4px 10px; } #hud small { font-size: 9px; } #hud span { font-size: 16px; } #hud div { min-width: 60px; }
-  body.touch #hud { right: 110px; }
+  body.touch #hud { right: 160px; }
   #toast { font-size: 30px; top: 22%; }
   #mapTop { top: 8px; left: 8px; font-size: 12px; padding: 4px 10px 4px 4px; } #mapTop img { width: 34px; height: 34px; }
   #mapInfo { bottom: 8px; padding: 6px 14px; } #mapNode { font-size: 15px; }
@@ -320,3 +320,58 @@ body.touch .controls, body.touch .hint, body.touch #mapInfo .mk { display: none;
   #tPad { width: 128px; height: 128px; bottom: 12px; } #tKnob { width: 52px; height: 52px; margin: -26px; }
   #tBtns { bottom: 10px; transform: scale(.88); transform-origin: right bottom; }
 }
+
+/* ================= Ajustes de controles ================= */
+/* posiciones personalizadas: cada control se centra en (--x, --y) en % de la pantalla y se escala con --s */
+body.touch #tBtns { inset: 0; width: auto; height: auto; transform: none; }
+body.touch #tPad, body.touch .tb {
+  left: var(--x); top: var(--y); right: auto; bottom: auto; margin: 0;
+  transform: translate(-50%, -50%) scale(var(--s, 1)); opacity: var(--op, .88);
+}
+body.touch .tb.on { transform: translate(-50%, -50%) scale(calc(var(--s, 1) * .92)); opacity: 1; box-shadow: 0 1px 0 #0009; }
+.ts#tGear { font-size: 20px; }
+body.touch.menu #tTop .ts#tGear { display: block; }
+
+#tSettings {
+  position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center;
+  background: #000b; padding: 10px;
+}
+#tSettings.show { display: flex; }
+.ts-card {
+  width: min(440px, 94vw); max-height: 94vh; overflow-y: auto; padding: 14px 18px 16px; border-radius: 16px;
+  background: linear-gradient(180deg, #0d2a14f5, #061309f5); border: 3px solid var(--sena); box-shadow: 0 8px 0 var(--ink);
+  display: flex; flex-direction: column; gap: 9px; font-weight: 800;
+}
+.ts-title { font-size: 18px; letter-spacing: 2px; color: var(--gold); text-align: center; }
+.ts-card label { display: flex; flex-wrap: wrap; justify-content: space-between; font-size: 13px; gap: 4px; }
+.ts-card label b { color: var(--sena-l); }
+.ts-card input[type=range] { width: 100%; accent-color: var(--sena); height: 22px; }
+.ts-card label.chk { justify-content: flex-start; align-items: center; gap: 10px; }
+.ts-card input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--sena); }
+.ts-row { display: flex; gap: 10px; }
+.ts-row button {
+  flex: 1; padding: 10px 0; border-radius: 10px; border: 3px solid var(--ink); font: 900 14px "Trebuchet MS", sans-serif;
+  background: #d8e2d4; color: var(--ink); box-shadow: 0 4px 0 var(--ink); letter-spacing: 1px;
+}
+.ts-row button.big { background: linear-gradient(180deg, #8be04e, #2a7d00); color: #fff; font-size: 15px; }
+.ts-row button.ok { background: linear-gradient(180deg, #ffe680, var(--gold) 55%, #e0a800); }
+.ts-row button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+
+/* modo mover: los controles muestran un marco y se arrastran */
+#tEditBar {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 31; display: none; align-items: center; gap: 12px;
+  padding: 6px 8px 6px 14px; background: #0b1f4af0; border: 3px solid #fff; border-radius: 12px; font-weight: 800; font-size: 13px;
+}
+#tEditBar button { padding: 8px 14px; border-radius: 8px; border: 3px solid var(--ink); background: var(--gold); font: 900 13px sans-serif; }
+body.tedit #tEditBar { display: flex; }
+body.tedit #touch { z-index: 29; }
+body.tedit #tPad, body.tedit .tb { outline: 3px dashed var(--gold); outline-offset: 6px; opacity: 1; animation: wiggle .5s ease-in-out infinite alternate; }
+body.tedit #tPad.drag, body.tedit .tb.drag { outline-color: #fff; animation: none; }
+body.tedit #tTop { display: none; }
+body.tedit::before { content: ""; position: fixed; inset: 0; background: #0006; z-index: 28; }
+@keyframes wiggle { from { rotate: -1.5deg; } to { rotate: 1.5deg; } }
+/* en el menú también se pueden mover (se muestran mientras se edita) */
+body.touch.menu.tedit #tPad, body.touch.menu.tedit #tBtns { display: block; }
+body.touch.map.tedit .tb-b, body.touch.map.tedit .tb-j { display: flex; }
+
+body.touch #hud { right: 160px; }

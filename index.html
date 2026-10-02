@@ -109,8 +109,28 @@
     <div id="tTop">
       <button class="ts" data-key="Escape">&#10074;&#10074;</button>
       <button class="ts" id="tFull">&#x26F6;</button>
+      <button class="ts" id="tGear" aria-label="Ajustes">&#9881;</button>
     </div>
   </div>
+  <!-- Ajustes de controles (celular) -->
+  <div id="tSettings">
+    <div class="ts-card">
+      <div class="ts-title">&#9881; AJUSTES DE CONTROLES</div>
+      <label>Tamaño de la cruceta <b id="vPad">100%</b><input type="range" id="sPad" min="60" max="160" step="5"></label>
+      <label>Tamaño de los botones <b id="vBtn">100%</b><input type="range" id="sBtn" min="60" max="160" step="5"></label>
+      <label>Transparencia <b id="vOp">88%</b><input type="range" id="sOp" min="25" max="100" step="5"></label>
+      <label class="chk"><input type="checkbox" id="sVib"> Vibrar al tocar</label>
+      <label class="chk"><input type="checkbox" id="sSwap"> Zurdo (cruceta a la derecha)</label>
+      <div class="ts-row">
+        <button id="sMove" class="big">&#9995; MOVER CONTROLES</button>
+      </div>
+      <div class="ts-row">
+        <button id="sReset">Restablecer</button>
+        <button id="sClose" class="ok">LISTO &#10004;</button>
+      </div>
+    </div>
+  </div>
+  <div id="tEditBar"><span>Arrastra cada control adonde quieras</span><button id="sEditDone">GUARDAR &#10004;</button></div>
   <div id="rotate"><div class="phone">&#128241;</div><b>Gira tu celular</b><span>SENA BROS se juega en horizontal</span></div>
 
   <div id="wipe"></div>
