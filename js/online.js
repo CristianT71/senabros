@@ -4,11 +4,16 @@
 'use strict';
 const cfg = window.SENA_CONFIG, lib = window.supabase;
 const $ = id => document.getElementById(id);
-const chip = $('acctChip'), modal = $('acctModal');
-if (!cfg || !lib || !chip) { if (chip) chip.style.display = 'none'; return; }
+const chip = $('acctChip');
+if (!cfg || !lib || !chip) {   // sin conexión con Supabase: se juega como invitado
+  if (chip) chip.style.display = 'none';
+  const a = $('authScreen'); if (a) a.classList.remove('show', 'checking');
+  return;
+}
+[...document.querySelectorAll('.bgimg')].forEach(e => { if (window.BG_YAMBORO) e.style.backgroundImage = `url(${window.BG_YAMBORO})`; });
 
 const db = lib.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });
-const state = { user: null, profile: null, friends: [], incoming: [], outgoing: [], challenges: [], tab: 'login', sub: 'friends', hasCode: true, preFriend: null };
+const state = { user: null, profile: null, friends: [], incoming: [], outgoing: [], challenges: [], tab: 'login', sub: 'friends', hasCode: true, preFriend: null, screen: 'auth', guest: false, afterCode: 'none' };
 const USER_RE = /^[A-Za-z0-9_]{3,16}$/;
 const emailFor = u => u.toLowerCase() + '@' + cfg.emailDomain;
 const KINDS = { coins: 'Más monedas', kills: 'Más bugs derrotados', score: 'Más puntos', time_left: 'Más tiempo restante' };
@@ -35,7 +40,18 @@ const ago = iso => {
   if (s < 150) return { on: true, text: 'conectado' };
   const m = s / 60; return { on: false, text: m < 60 ? `hace ${Math.round(m)} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d` };
 };
-function setMsg(text, good = false) { const m = $('acctMsg'); m.textContent = text || ''; m.className = good ? 'good' : ''; }
+function setMsg(text, good = false) {
+  const cur = { auth: 'authMsg', profile: 'profMsg', code: 'codeMsg' }[state.screen];
+  for (const id of ['authMsg', 'profMsg', 'codeMsg']) { const m = $(id); m.textContent = id === cur ? (text || '') : ''; m.className = 'msg' + (good && id === cur ? ' good' : ''); }
+}
+function showScreen(name) {
+  state.screen = name;
+  for (const [id, key] of [['authScreen', 'auth'], ['profileScreen', 'profile'], ['codeScreen', 'code']]) $(id).classList.toggle('show', key === name);
+  document.body.classList.toggle('acct-open', name !== 'none');
+  if (name === 'profile') renderProfile();
+  setMsg('');
+}
+const endChecking = () => $('authScreen').classList.remove('checking');
 const show = (id, on) => { $(id).hidden = !on; };
 
 // ---------- sesión y perfil ----------
@@ -45,16 +61,26 @@ async function loadProfile() {
   try {
     const { data: { session } } = await db.auth.getSession();
     state.user = session ? session.user : null;
-    if (!state.user) { state.profile = null; return render(); }
+    if (!state.user) { state.profile = null; endChecking(); if (!state.guest && state.screen !== 'code') showScreen('auth'); return render(); }
     const { data, error } = await db.from('profiles').select('id,username,player_code,character_name,last_seen,username_changed').eq('id', state.user.id).maybeSingle();
     state.profile = error ? null : data;
+    endChecking();
+    if (state.profile && state.guest) { state.guest = false; if (window.SENA_SET_GUEST) SENA_SET_GUEST(false); }
+    if (state.profile && state.screen === 'auth') showScreen('none');
+    if (!state.profile && state.screen !== 'code') showScreen('auth');
     render();
     if (state.profile) { await syncDown(); await Promise.all([loadFriends(), loadChallenges(), loadRecoveryStatus()]); db.rpc('touch_presence'); }
   } finally { loadingProfile = false; }
 }
 db.auth.onAuthStateChange((ev) => {
   if (ev === 'SIGNED_IN' && !state.profile && !loadingProfile) loadProfile();
-  if (ev === 'SIGNED_OUT') { state.user = state.profile = null; state.friends = state.incoming = state.outgoing = state.challenges = []; render(); }
+  if (ev === 'SIGNED_OUT') {
+    state.user = state.profile = null; state.friends = state.incoming = state.outgoing = state.challenges = []; state.guest = false;
+    for (const k of ['senabros_progress', 'senabros_powers', 'senabros_best']) { try { localStorage.removeItem(k); } catch (_) {} }   // el progreso queda en la nube; no se mezcla con la próxima cuenta
+    if (window.SENA_SET_GUEST) SENA_SET_GUEST(false);
+    if (window.SENA_RELOAD) SENA_RELOAD();
+    showScreen('auth'); render();
+  }
 });
 setInterval(() => { if (state.profile) { db.rpc('touch_presence'); loadFriends(); loadChallenges(); } }, 45000);
 
@@ -101,7 +127,7 @@ async function loadFriends() {
   if (!state.user) return;
   const cols = 'id,username,player_code,character_name,last_seen';
   const { data, error } = await db.from('friendships').select(`id,status,requester_id,addressee_id,requester:profiles!friendships_requester_id_fkey(${cols}),addressee:profiles!friendships_addressee_id_fkey(${cols})`);
-  if (error) return;
+  if (error || !state.user) return;   // la sesión pudo cerrarse mientras se cargaba
   const me = state.user.id;
   state.friends = data.filter(f => f.status === 'accepted').map(f => ({ fid: f.id, ...(f.requester_id === me ? f.addressee : f.requester) }));
   state.incoming = data.filter(f => f.status === 'pending' && f.addressee_id === me).map(f => ({ fid: f.id, ...f.requester }));
@@ -125,7 +151,7 @@ async function loadChallenges() {
   const { data, error } = await db.from('challenges')
     .select(`id,kind,world,level,status,creator_id,opponent_id,creator_result,opponent_result,created_at,expires_at,creator:profiles!challenges_creator_id_fkey(${cols}),opponent:profiles!challenges_opponent_id_fkey(${cols})`)
     .order('created_at', { ascending: false }).limit(30);
-  if (error) return;
+  if (error || !state.user) return;
   state.challenges = data; renderChallenges(); updateBadges();
 }
 const levelLabel = (w, l) => { const L = (window.SENA_LEVELS ? window.SENA_LEVELS() : []).find(x => x.world === w && x.level === l); return `${w}-${l}${L ? ' ' + L.name : ''}`; };
@@ -179,7 +205,7 @@ async function answerChallenge(id, accept) { const { error } = await db.rpc('res
 async function cancelChallenge(id) { if (!confirm('¿Cancelar este reto?')) return; const { error } = await db.rpc('cancel_challenge', { challenge: id }); if (error) setMsg(friendly(error)); await loadChallenges(); }
 function playChallenge(c) {
   const other = c.creator_id === state.user.id ? c.opponent : c.creator;
-  if (window.SENA_PLAY_CHALLENGE && SENA_PLAY_CHALLENGE({ id: c.id, kind: c.kind, world: c.world, level: c.level, rival: other ? other.username : '' })) modal.classList.remove('show');
+  if (window.SENA_PLAY_CHALLENGE && SENA_PLAY_CHALLENGE({ id: c.id, kind: c.kind, world: c.world, level: c.level, rival: other ? other.username : '' })) showScreen('none');
 }
 // el juego llama a esto al terminar un nivel de reto
 async function submitChallenge(id, value) {
@@ -199,10 +225,13 @@ async function generateCode() {
   if (state.hasCode && !confirm('Se generará un código nuevo y el anterior dejará de funcionar. ¿Continuar?')) return;
   const { data, error } = await db.rpc('create_recovery_code');
   if (error) return setMsg(friendly(error));
-  showCode(data); loadRecoveryStatus();
+  state.afterCode = 'profile'; showCode(data); loadRecoveryStatus();
 }
 function showCode(code) {
-  $('codeText').textContent = code; show('acctOut', false); show('acctIn', false); show('acctCode', true); setMsg('');
+  $('codeText').textContent = code;
+  $('codeBoxes').replaceChildren(...code.split('-').map(g => el('span', {}, g)));
+  $('codeSaved').checked = false; $('codeDone').disabled = true;
+  showScreen('code');
 }
 function updateBadges() {
   const meId = state.user && state.user.id, pending = state.incoming.length, toPlay = state.challenges.filter(c => {
@@ -216,21 +245,28 @@ function updateBadges() {
 // ---------- interfaz ----------
 function render() {
   const p = state.profile;
-  chip.textContent = p ? p.username : 'Entrar / Crear cuenta';
+  chip.textContent = p ? p.username : state.guest ? 'Invitado: iniciar sesión' : 'Entrar / Crear cuenta';
   chip.title = p ? `Tu ID: ${p.player_code}` : 'Guarda tu progreso y juega con amigos';
-  const codeOpen = !$('acctCode').hidden;
-  show('acctOut', !p && !codeOpen); show('acctIn', !!p && !codeOpen);
-  if (p) {
-    $('meName').textContent = p.username; $('meCode').textContent = p.player_code; $('meRename').hidden = !!p.username_changed;
-    renderFriends(); renderChallenges(); setSub(state.sub);
-  } else {
-    $('tabLogin').classList.toggle('on', state.tab === 'login'); $('tabSignup').classList.toggle('on', state.tab === 'signup');
-    $('acctGo').textContent = state.tab === 'login' ? 'ENTRAR' : 'CREAR CUENTA';
-    $('acctPass').autocomplete = state.tab === 'login' ? 'current-password' : 'new-password';
-    $('acctHint').textContent = state.tab === 'signup' ? 'Elige un usuario de 3 a 16 letras, números o _. Será tu nombre público.' : '';
-    show('acctForgot', state.tab === 'login');
-  }
+  $('tabLogin').classList.toggle('on', state.tab === 'login'); $('tabSignup').classList.toggle('on', state.tab === 'signup');
+  $('acctGo').textContent = state.tab === 'login' ? 'ENTRAR' : 'CREAR CUENTA';
+  $('acctPass').autocomplete = state.tab === 'login' ? 'current-password' : 'new-password';
+  $('acctHint').textContent = state.tab === 'signup' ? 'Elige un usuario de 3 a 16 letras, números o _. Será tu nombre público.' : '';
+  show('acctForgot', state.tab === 'login');
+  if (state.screen === 'profile') renderProfile();
   updateBadges();
+}
+function renderProfile() {
+  const p = state.profile; if (!p) return;
+  $('meName').textContent = p.username; $('meCode').textContent = p.player_code; $('meRename').hidden = !!p.username_changed;
+  const ch = window.SENA_CURRENT_CHAR ? SENA_CURRENT_CHAR() : ['Diego', 'Diego'];
+  $('pPortrait').src = (window.PORTRAITS && window.PORTRAITS[ch[0]]) || ''; $('pChar').textContent = 'Instructor: ' + ch[1];
+  const st = window.SENA_STATS ? SENA_STATS() : { best: 0, levels: 0, totalLevels: 11, powers: 0, totalPowers: 7 };
+  const meId = state.user && state.user.id;
+  const wins = state.challenges.filter(c => c.status === 'finished' && (c.creator_id === meId ? c.creator_result > c.opponent_result : c.opponent_result > c.creator_result)).length;
+  $('stBest').textContent = (st.best || 0).toLocaleString('es'); $('stLevels').textContent = `${st.levels}/${st.totalLevels}`; $('stPowers').textContent = `${st.powers}/${st.totalPowers}`; $('stWins').textContent = wins;
+  const pw = window.SENA_POWER_INFO ? SENA_POWER_INFO() : null;
+  if (pw) { $('ppName').textContent = pw.name; $('ppText').textContent = pw.unlocked ? pw.desc : `Bloqueado. Misión: ${pw.mission} (${pw.progress}/${pw.goal})`; }
+  renderFriends(); renderChallenges(); setSub(state.sub);
 }
 function setSub(name) {
   state.sub = name;
@@ -284,7 +320,7 @@ async function submit(e) {
       if (error) throw error;
     }
     setMsg(''); $('acctPass').value = '';
-    if (newCode) showCode(newCode);       // se muestra una sola vez, antes de entrar al perfil
+    if (newCode) { state.afterCode = 'none'; showCode(newCode); }       // se muestra una sola vez, antes de entrar al juego
     await loadProfile();
     if (window.SenaOnline) SenaOnline.queueSave();
   } catch (err) { setMsg(friendly(err)); } finally { btn.disabled = false; }
@@ -307,15 +343,20 @@ async function recover(e) {
 async function deleteAccount() {
   if (!confirm('¿Borrar tu cuenta para siempre? Se pierden tu usuario, tus amigos y tu progreso en la nube.')) return;
   const { error } = await db.rpc('delete_my_account'); if (error) return setMsg(friendly(error));
-  await db.auth.signOut(); setMsg('Cuenta borrada', true); render();
+  await db.auth.signOut();
+  setMsg('Cuenta borrada', true);
 }
 
 // ---------- eventos ----------
-const openModal = sub => { modal.classList.add('show'); setMsg(''); if (state.profile) { setSub(sub || state.sub); loadFriends(); loadChallenges(); loadRecoveryStatus(); } };
-chip.onclick = () => openModal();
-$('acctClose').onclick = () => modal.classList.remove('show');
-modal.addEventListener('pointerdown', e => { if (e.target === modal) modal.classList.remove('show'); });
-addEventListener('keydown', e => { if (e.code === 'Escape' && modal.classList.contains('show')) modal.classList.remove('show'); });
+function startGuest() {
+  state.guest = true; if (window.SENA_SET_GUEST) SENA_SET_GUEST(true);
+  endChecking(); showScreen('none'); render();
+}
+const openProfile = sub => { showScreen('profile'); if (sub) setSub(sub); loadFriends(); loadChallenges(); loadRecoveryStatus(); };
+chip.onclick = () => { if (state.profile) openProfile(); else { showScreen('auth'); setMsg(''); } };
+$('guestBtn').onclick = startGuest;
+$('profBack').onclick = () => showScreen('none');
+addEventListener('keydown', e => { if (e.code === 'Escape' && state.screen === 'profile') showScreen('none'); });
 $('tabLogin').onclick = () => { state.tab = 'login'; setMsg(''); render(); };
 $('tabSignup').onclick = () => { state.tab = 'signup'; setMsg(''); render(); };
 $('acctForm').addEventListener('submit', submit);
@@ -327,8 +368,9 @@ $('codeDownload').onclick = () => {
   const blob = new Blob([`SENA Bros - código de recuperación\nUsuario: ${state.profile ? state.profile.username : ''}\nCódigo: ${$('codeText').textContent}\n\nGuárdalo en un lugar seguro. Sirve una sola vez.\n`], { type: 'text/plain' });
   const a = el('a', { href: URL.createObjectURL(blob), download: 'senabros-recuperacion.txt' }); document.body.append(a); a.click(); a.remove();
 };
-$('codeDone').onclick = () => { show('acctCode', false); $('codeText').textContent = '----'; render(); };
-$('acctLogout').onclick = async () => { await db.auth.signOut(); modal.classList.remove('show'); };
+$('codeSaved').onchange = () => { $('codeDone').disabled = !$('codeSaved').checked; };
+$('codeDone').onclick = () => { if ($('codeDone').disabled) return; $('codeText').textContent = '----'; showScreen(state.afterCode === 'profile' && state.profile ? 'profile' : 'none'); render(); };
+$('acctLogout').onclick = async () => { await pushNow(); await db.auth.signOut(); };
 $('acctDelete').onclick = deleteAccount;
 $('recGen').onclick = generateCode; $('recAlertGo').onclick = generateCode;
 $('stFriends').onclick = () => setSub('friends'); $('stChallenges').onclick = () => { setSub('challenges'); loadChallenges(); }; $('stSecurity').onclick = () => setSub('security');
@@ -354,7 +396,7 @@ window.SenaOnline = {
   queueSave() { clearTimeout(saveTimer); saveTimer = setTimeout(pushNow, 2500); },
   get user() { return state.profile; },
   submitChallenge,
-  openChallenges() { openModal('challenges'); },
+  openChallenges() { openProfile('challenges'); },
 };
 render(); loadProfile();
 })();

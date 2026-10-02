@@ -882,7 +882,8 @@ function loadProgress() {
     return { done: [d[0] | 0, d[1] | 0], node: [n[0] | 0, n[1] | 0], world: p.world | 0 };
   } catch (_) { return { done: [0, 0], node: [0, 0], world: 0 }; }
 }
-function saveProgress() { try { localStorage.setItem('senabros_progress', JSON.stringify(game.progress)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
+let persist = true;   // false en modo invitado: no se guarda nada (ni en el navegador ni en la nube)
+function saveProgress() { if (!persist) return; try { localStorage.setItem('senabros_progress', JSON.stringify(game.progress)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
 const game = { state: 'loading', score: 0, coins: 0, lives: 3, time: TIME_LIMIT, checkpoint: 3, winT: 0, level: 0, world: 0, progress: loadProgress() };
 game.world = game.progress.world;
 const worldLabel = document.getElementById('worldLabel');
@@ -1157,12 +1158,25 @@ window.SENA_RELOAD = () => {   // la nube trajo progreso nuevo: releerlo del alm
   Object.assign(powerData, loadPowers()); setPowerUI();
 };
 window.SENA_BEST_SCORE = () => +(localStorage.getItem('senabros_best') || 0);
+window.SENA_SET_GUEST = on => {   // invitado: empieza de cero y no guarda; al salir se vuelve a leer lo guardado
+  persist = !on;
+  if (on) {
+    Object.assign(game.progress, { done: [0, 0], node: [0, 0], world: 0 }); game.world = 0;
+    for (const k of Object.keys(powerData)) delete powerData[k];
+    setPowerUI();
+  } else window.SENA_RELOAD();
+};
+window.SENA_STATS = () => ({ best: window.SENA_BEST_SCORE(), levels: game.progress.done[0] + game.progress.done[1], totalLevels: 11,
+  powers: Object.values(powerData).filter(d => d.unlocked).length, totalPowers: 7 });
+window.SENA_CURRENT_CHAR = () => [CHARS[charIdx][0], CHARS[charIdx][1]];
+window.SENA_POWER_INFO = () => { const id = curPowerId(), P = POWERS[id], M = MISSIONS[id], d = pstat(id);
+  return { name: P.name, desc: P.desc, unlocked: powerUnlocked(id), mission: M.text, goal: M.goal, progress: Math.min(d[M.stat] || 0, M.goal) }; };
 function recordBest() {
-  if (game.score > window.SENA_BEST_SCORE()) { try { localStorage.setItem('senabros_best', String(game.score)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
+  if (persist && game.score > window.SENA_BEST_SCORE()) { try { localStorage.setItem('senabros_best', String(game.score)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
 }
 function pstat(id = curPowerId()) { return powerData[id] || (powerData[id] = { unlocked: false }); }
 const powerUnlocked = (id = curPowerId()) => !!pstat(id).unlocked;
-function savePowers() { try { localStorage.setItem('senabros_powers', JSON.stringify(powerData)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
+function savePowers() { if (!persist) return; try { localStorage.setItem('senabros_powers', JSON.stringify(powerData)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
 // suma progreso a la misión del instructor actual y lo desbloquea al cumplirla
 function missionProgress(stat, n = 1) {
   const id = curPowerId(), M = MISSIONS[id], d = pstat(id);
@@ -1417,7 +1431,8 @@ function dashTrail(p) {
 const keys = {}, pressed = {};
 const MAP = { jump: ['Space', 'ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], punch: ['KeyJ'], power: ['KeyK'] };
 addEventListener('keydown', e => {
-  if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;   // escribiendo en el formulario de cuenta
+  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;   // escribiendo en un formulario
+  if (document.body.classList.contains('acct-open')) return;                   // hay una pantalla de cuenta encima
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
   if (e.repeat) return;

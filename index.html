@@ -22,17 +22,24 @@
 
   <button id="acctChip" class="chip" type="button">Entrar / Crear cuenta</button>
 
-  <!-- Cuenta, amigos, retos y progreso en la nube -->
-  <div id="acctModal">
-    <div class="acct-card">
-      <button id="acctClose" class="acct-x" aria-label="Cerrar">&times;</button>
-
-      <div id="acctOut">
-        <div class="acct-title">TU CUENTA SENA BROS</div>
-        <div class="acct-sub">Guarda tu progreso en la nube, juega con amigos y rétalos</div>
+  <!-- ===== Pantalla de entrada: login, registro, Google e invitado ===== -->
+  <section id="authScreen" class="screen show checking">
+    <div class="bgimg"></div><div class="bgshade"></div><div class="coinfx"><i style="--x:6%;--d:0s;--s:26px;--t:14s"></i><i style="--x:14%;--d:3s;--s:18px;--t:11s"></i><i style="--x:24%;--d:7s;--s:30px;--t:16s"></i><i style="--x:36%;--d:2s;--s:16px;--t:12s"></i><i style="--x:47%;--d:9s;--s:24px;--t:15s"></i><i style="--x:58%;--d:5s;--s:20px;--t:13s"></i><i style="--x:69%;--d:1s;--s:28px;--t:17s"></i><i style="--x:79%;--d:8s;--s:18px;--t:12s"></i><i style="--x:88%;--d:4s;--s:26px;--t:14s"></i><i style="--x:95%;--d:10s;--s:16px;--t:11s"></i></div>
+    <div class="checking-txt"><div class="spin"></div>Cargando tu cuenta...</div>
+    <div class="auth-wrap">
+      <div class="auth-hero">
+        <div class="logo big"><div class="logo-top">SENA</div><div class="logo-bottom">BROS</div><div class="shine"></div></div>
+        <div class="hero-sub">Instructores ADSO contra los bugs</div>
+        <ul class="feats">
+          <li><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><path d="M7 18a4 4 0 0 1-.6-7.95A6 6 0 0 1 18.2 9.4 4.3 4.3 0 0 1 17 18z"/><path d="M12 12v5M9.5 14.5L12 12l2.5 2.5"/></svg><div><b>Tu progreso en la nube</b><small>Sigue jugando desde cualquier celular o computador</small></div></li>
+          <li><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.6c3 0 5 1.8 5 4.4"/></svg><div><b>Juega con amigos</b><small>Búscalos por usuario o por su ID</small></div></li>
+          <li><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"/><path d="M12 14v4M8 21h8M9 18h6"/></svg><div><b>Retos entre instructores</b><small>Compara monedas, bugs y puntos</small></div></li>
+        </ul>
+      </div>
+      <div class="auth-card">
         <div id="acctMain">
           <div class="tabs"><button id="tabLogin" type="button" class="on">Entrar</button><button id="tabSignup" type="button">Crear cuenta</button></div>
-          <button id="acctGoogle" type="button" class="gbtn"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuar con Google</button>
+          <button id="acctGoogle" type="button" class="gbtn"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continuar con Google</button>
           <div class="or"><span>o con usuario y contraseña</span></div>
           <form id="acctForm" autocomplete="on">
             <label>Usuario<input id="acctUser" type="text" maxlength="16" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
@@ -41,69 +48,99 @@
             <button id="acctGo" type="submit" class="go">ENTRAR</button>
           </form>
           <button id="acctForgot" type="button" class="linkbtn">Olvidé mi contraseña</button>
+          <div class="or"><span>o</span></div>
+          <button id="guestBtn" type="button" class="guest">Jugar como invitado</button>
+          <div class="guest-note">Como invitado no se guarda tu progreso</div>
         </div>
-
         <form id="acctRecover" hidden autocomplete="off">
           <div class="rc-title">Recuperar contraseña</div>
-          <div class="hint2">Usa el código de recuperación que te dimos al crear tu cuenta (formato XXXX-XXXX-XXXX).</div>
+          <div class="hint2">Usa el código de recuperación que recibiste al crear tu cuenta (formato XXXX-XXXX-XXXX).</div>
           <label>Usuario<input id="rcUser" type="text" maxlength="16" autocapitalize="none" spellcheck="false" required></label>
           <label>Código de recuperación<input id="rcCode" type="text" maxlength="20" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" required></label>
           <label>Contraseña nueva<input id="rcPass" type="password" minlength="6" maxlength="72" autocomplete="new-password" required></label>
           <button id="rcGo" type="submit" class="go">CAMBIAR CONTRASEÑA</button>
           <button id="rcBack" type="button" class="linkbtn">Volver</button>
         </form>
+        <div id="authMsg" class="msg"></div>
       </div>
+    </div>
+  </section>
 
-      <div id="acctCode" hidden>
-        <div class="acct-title">TU CÓDIGO DE RECUPERACIÓN</div>
-        <div class="acct-sub">Guárdalo en un lugar seguro: lo necesitas si olvidas tu contraseña. Solo se muestra esta vez.</div>
-        <div id="codeText" class="bigcode">----</div>
-        <div class="srow"><button id="codeCopy" type="button" class="mini ok">Copiar</button><button id="codeDownload" type="button" class="mini">Descargar archivo</button></div>
-        <button id="codeDone" type="button" class="go" style="margin-top:14px">YA LO GUARDÉ</button>
-      </div>
+  <!-- ===== Llave de recuperación ===== -->
+  <section id="codeScreen" class="screen">
+    <div class="bgimg"></div><div class="bgshade"></div>
+    <div class="code-card">
+      <div class="keyico"><svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></svg></div>
+      <div class="code-title">TU LLAVE DE RECUPERACIÓN</div>
+      <div class="code-sub">Si olvidas tu contraseña, esta llave es la única forma de recuperar tu cuenta. Solo se muestra ahora.</div>
+      <div id="codeBoxes" class="codeboxes"><span>----</span><span>----</span><span>----</span></div>
+      <div id="codeText" hidden>----</div>
+      <div class="code-actions"><button id="codeCopy" type="button" class="mini ok big">Copiar</button><button id="codeDownload" type="button" class="mini big">Descargar archivo</button></div>
+      <label class="chk2"><input id="codeSaved" type="checkbox"> Ya guardé mi llave en un lugar seguro</label>
+      <button id="codeDone" type="button" class="go" disabled>CONTINUAR</button>
+      <div id="codeMsg" class="msg"></div>
+    </div>
+  </section>
 
-      <div id="acctIn" hidden>
-        <div class="me">
-          <div><small>JUGADOR</small><b id="meName">-</b><button id="meRename" type="button" class="mini" hidden>Cambiar usuario (1 vez)</button></div>
-          <div><small>TU ID (compártelo para que te agreguen)</small><b id="meCode" class="code">SB-</b><button id="meCopy" type="button" class="mini">Copiar</button></div>
+  <!-- ===== Perfil del jugador ===== -->
+  <section id="profileScreen" class="screen">
+    <div class="bgimg"></div><div class="bgshade"></div>
+    <header class="prof-top"><button id="profBack" type="button" class="backbtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><path d="M15 5l-7 7 7 7"/></svg> Volver al juego</button><div class="prof-title">MI PERFIL</div><div class="prof-spacer"></div></header>
+    <div class="prof-wrap">
+      <aside class="pcard">
+        <div class="pframe"><img id="pPortrait" alt=""><span class="pbadge" id="pBadge">Jugador</span></div>
+        <div id="meName" class="pname">-</div>
+        <button id="meRename" type="button" class="mini" hidden>Cambiar usuario (1 vez)</button>
+        <div class="pid"><small>TU ID</small><b id="meCode">SB-</b><button id="meCopy" type="button" class="mini">Copiar</button></div>
+        <div id="pChar" class="pchar">Instructor: -</div>
+        <div class="stats">
+          <div><b id="stBest">0</b><small>Mejor puntaje</small></div>
+          <div><b id="stLevels">0/11</b><small>Niveles</small></div>
+          <div><b id="stPowers">0/7</b><small>Poderes</small></div>
+          <div><b id="stWins">0</b><small>Retos ganados</small></div>
         </div>
-        <div id="recAlert" class="alertbox" hidden>Aún no tienes código de recuperación. <button id="recAlertGo" type="button" class="mini ok">Generar ahora</button></div>
+        <div class="ppower"><small>PODER DEL INSTRUCTOR</small><b id="ppName">-</b><span id="ppText"></span></div>
+      </aside>
+      <main class="ppanel">
+        <div id="recAlert" class="alertbox" hidden>Aún no tienes llave de recuperación. <button id="recAlertGo" type="button" class="mini ok">Generar ahora</button></div>
         <div class="subtabs">
           <button id="stFriends" type="button" class="on">Amigos</button>
           <button id="stChallenges" type="button">Retos <i id="chBadge" hidden></i></button>
           <button id="stSecurity" type="button">Seguridad</button>
         </div>
-
-        <div id="secFriends">
-          <div class="srow"><input id="fSearch" type="text" placeholder="Usuario o ID (SB-XXXXXX)" maxlength="20" autocapitalize="none" spellcheck="false"><button id="fGo" type="button" class="mini ok">Buscar</button></div>
-          <div id="fSearchOut"></div>
-          <div id="fList"></div>
-        </div>
-
-        <div id="secChallenges" hidden>
-          <div class="ptitle">Nuevo reto</div>
-          <div id="chForm">
-            <label>Amigo<select id="chFriend"></select></label>
-            <label>Quién gana<select id="chKind">
-              <option value="coins">Más monedas</option><option value="kills">Más bugs derrotados</option>
-              <option value="score">Más puntos</option><option value="time_left">Más tiempo restante al terminar</option></select></label>
-            <label>Nivel<select id="chLevel"></select></label>
-            <button id="chSend" type="button" class="go small">ENVIAR RETO</button>
+        <div class="pbody">
+          <div id="secFriends">
+            <div class="srow"><input id="fSearch" type="text" placeholder="Buscar por usuario o ID (SB-XXXXXX)" maxlength="20" autocapitalize="none" spellcheck="false"><button id="fGo" type="button" class="mini ok big">Buscar</button></div>
+            <div id="fSearchOut"></div>
+            <div id="fList"></div>
           </div>
-          <div id="chList"></div>
-          <button id="chRefresh" type="button" class="linkbtn">Actualizar</button>
+          <div id="secChallenges" hidden>
+            <div class="ptitle">Nuevo reto</div>
+            <div id="chForm">
+              <div class="frow">
+                <label>Amigo<select id="chFriend"></select></label>
+                <label>Quién gana<select id="chKind">
+                  <option value="coins">Más monedas</option><option value="kills">Más bugs derrotados</option>
+                  <option value="score">Más puntos</option><option value="time_left">Más tiempo restante</option></select></label>
+                <label>Nivel<select id="chLevel"></select></label>
+              </div>
+              <button id="chSend" type="button" class="go small">ENVIAR RETO</button>
+            </div>
+            <div id="chList"></div>
+            <button id="chRefresh" type="button" class="linkbtn">Actualizar</button>
+          </div>
+          <div id="secSecurity" hidden>
+            <div class="ptitle">Llave de recuperación</div>
+            <div id="recStatus" class="hint2"></div>
+            <button id="recGen" type="button" class="mini ok big">Generar llave</button>
+            <div class="ptitle">Cuenta</div>
+            <div class="acct-foot"><button id="acctLogout" type="button" class="mini big">Cerrar sesión</button><button id="acctDelete" type="button" class="mini danger big">Borrar mi cuenta</button></div>
+          </div>
         </div>
-
-        <div id="secSecurity" hidden>
-          <div class="ptitle">Código de recuperación</div>
-          <div id="recStatus" class="hint2"></div>
-          <button id="recGen" type="button" class="mini ok">Generar código</button>
-          <div class="acct-foot"><button id="acctLogout" type="button" class="mini">Cerrar sesión</button><button id="acctDelete" type="button" class="mini danger">Borrar mi cuenta</button></div>
-        </div>
-      </div>
-      <div id="acctMsg"></div>
+        <div id="profMsg" class="msg"></div>
+      </main>
     </div>
-  </div>
+  </section>
 
   <div id="overlay" class="show">
     <div class="rays"></div>
@@ -249,5 +286,6 @@
   <script src="js/game.js"></script>
   <script src="js/touch.js"></script>
   <script src="js/online.js"></script>
+  <script>/* authFallback */setTimeout(function(){var a=document.getElementById("authScreen");if(a&&a.classList.contains("checking"))a.classList.remove("checking")},9000)</script>
 </body>
 </html>
