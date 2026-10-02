@@ -639,6 +639,10 @@ function updatePlats(dt) {
     if (pl.type === 'h' || pl.type === 'v') {
       pl.t += dt; const k = 0.5 - 0.5 * Math.cos(pl.t * Math.PI * pl.speed / pl.range);
       if (pl.type === 'h') pl.x = pl.x0 + pl.range * k; else pl.y = pl.y0 + pl.range * k;
+    } else if (pl.type === 'tmp') {
+      pl.life -= dt;
+      pl.mesh.children.forEach(m => { m.userData.d -= dt; if (m.userData.d < 0) m.scale.setScalar(Math.min(1, m.scale.x + dt * 7)); m.visible = pl.life > 1.2 || Math.floor(pl.life * 10) % 2 === 0; });
+      if (pl.life <= 0) { levelGroup.remove(pl.mesh); pl.y = -99; if (p.onPlat === pl) p.onPlat = null; }
     } else if (pl.state === 'shake') {
       pl.fallT -= dt; jit = (Math.random() - 0.5) * 0.08; if (pl.fallT <= 0) pl.state = 'fall';
     } else if (pl.state === 'fall') {
@@ -892,7 +896,8 @@ function addCoinCount() { game.coins++; addScore(200); SFX.coin(); if (game.coin
 
 function resetPlayer(x) {
   Object.assign(player, { x, y: 2, vx: 0, vy: 0, facing: 1, grounded: false, crouch: false, pound: false, punchT: 0, landT: 0, dead: false, deadT: 0, invT: 1.2, rot: 0,
-    big: false, growT: 0, hw: SIZE.small.hw, h: SIZE.small.h });
+    big: false, growT: 0, hw: SIZE.small.hw, h: SIZE.small.h,
+    powerCD: 0, shieldT: 0, dashT: 0, slowT: 0, powerAnimT: 0, airDash: true, airJumps: 1 });
   play('M_Idle', { fade: 0.05 });
 }
 // entra a un nivel (índice 0..5)
@@ -1004,6 +1009,7 @@ function die() {
 }
 // recibir daño: si es grande se encoge, si es pequeño muere
 function damage() {
+  if (player.shieldT > 0 || player.dashT > 0) return;   // Estructura Estable / dash: invulnerable
   if (player.big) { player.big = false; player.growT = 0.8; player.invT = 2.0; SFX.shrink(); }
   else die();
 }
@@ -1071,9 +1077,250 @@ function poundLand() {
   p.landT = 0.25; play('M_Land', { loop: false, fade: 0.05 });
 }
 
+
+// ================= Poderes de los instructores =================
+// Cada instructor tiene un poder (tecla K / botón ⚡) con recarga y efectos propios.
+const POWERS = {
+  Diego:     { name: 'Estructura Estable', area: 'Backend y Arquitectura', icon: '🛡', color: '#ffd23f', cd: 12, desc: 'Invulnerable 4,5 s: destruye lo que toca' },
+  Wilson:    { name: 'Escudo SQL', area: 'Bases de Datos', icon: '🗄', color: '#4ad8ff', cd: 9, desc: 'Onda expansiva que borra los bugs cercanos' },
+  Juan:      { name: 'Cálculo de Vector', area: 'Matemáticas e Ing. de Sistemas', icon: '📐', color: '#b36bff', cd: 1.1, desc: 'Dispara figuras geométricas' },
+  Carlos:    { name: 'Sprint Ágil', area: 'Metodologías Ágiles', icon: '📋', color: '#39d98a', cd: 14, desc: 'Bugs en cámara lenta 6 s y tú más rápido' },
+  Intructor: { name: 'Salto Coordinado', area: 'Formación Integral', icon: '🦘', color: '#ff8a1a', cd: 5, desc: 'Doble salto siempre + súper salto' },
+  Jhonny:    { name: 'Dash Idiomático', area: 'Idiomas y Bilingüismo', icon: '💨', color: '#ff4a8a', cd: 0.8, desc: 'Impulso veloz, también en el aire' },
+  Fabian:    { name: 'Render </>', area: 'Frontend e Interfaces', icon: '</>', color: '#39a9ff', cd: 7, desc: 'Construye un puente de código' },
+};
+const curPowerId = () => CHARS[charIdx][0];
+const curPower = () => POWERS[curPowerId()];
+
+// --- efectos temporales: { obj, t, life, upd(obj, k, dt) -> true para terminar antes } ---
+const pfx = [];
+function addFx(obj, life, upd) { scene.add(obj); pfx.push({ obj, t: 0, life, upd }); }
+function updatePfx(dt) {
+  for (let i = pfx.length - 1; i >= 0; i--) {
+    const f = pfx[i]; f.t += dt; const k = f.t / f.life;
+    if (k >= 1 || f.upd(f.obj, k, dt) === true) { scene.remove(f.obj); pfx.splice(i, 1); }
+  }
+}
+function textSprite(text, color, size = 1) {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 128; const g = c.getContext('2d');
+  g.font = 'bold 60px "Courier New", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 12; g.strokeStyle = '#08130a'; g.strokeText(text, 512, 64); g.fillStyle = color; g.fillText(text, 512, 64);
+  const sp = new T.Sprite(new T.SpriteMaterial({ map: new T.CanvasTexture(c), transparent: true, depthTest: false }));
+  sp.scale.set(8 * size, size, 1); sp.renderOrder = 20; return sp;
+}
+function floatText(text, color, x, y, size = 1, life = 1.2, vx = 0) {
+  const sp = textSprite(text, color, size); sp.position.set(x, y, 2);
+  addFx(sp, life, (o, k, dt) => { o.position.y += dt * 1.5; o.position.x += vx * dt; o.material.opacity = 1 - k * k; });
+}
+function burstColor(x, y, col, n = 30, sp = 6, z = 1.5) {
+  const mat = new T.MeshBasicMaterial({ color: col, transparent: true });
+  for (let i = 0; i < n; i++) {
+    const m = new T.Mesh(sparkGeo, mat), a = Math.random() * 6.283, b = Math.acos(Math.random() * 2 - 1), v = sp * (0.5 + Math.random() * 0.6);
+    m.position.set(x, y, z); scene.add(m);
+    sparks.push({ m, mat, vx: Math.sin(b) * Math.cos(a) * v, vy: Math.cos(b) * v, vz: Math.sin(b) * Math.sin(a) * v * 0.4, life: 0.6 + Math.random() * 0.5 });
+  }
+}
+function ringFx(x, y, col, { flat = false, from = 0.3, to = 4, life = 0.6, width = 0.18, z = 0.5 } = {}) {
+  const m = new T.Mesh(new T.RingGeometry(1 - width, 1, 64), new T.MeshBasicMaterial({ color: col, transparent: true, side: T.DoubleSide, depthWrite: false }));
+  m.position.set(x, y, z); if (flat) m.rotation.x = -Math.PI / 2;
+  addFx(m, life, (o, k) => { const r = from + (to - from) * (1 - (1 - k) * (1 - k)); o.scale.set(r, r, r); o.material.opacity = 1 - k; });
+  return m;
+}
+const powerHud = document.getElementById('powerHud'), phName = document.getElementById('phName'), phState = document.getElementById('phState'), phIcon = document.getElementById('phIcon');
+const tPow = document.getElementById('tPow'), tPowIcon = document.getElementById('tPowIcon');
+const sprintFx = document.getElementById('sprintFx'), sprintTEl = document.getElementById('sprintT');
+function powerBanner(P) {
+  const b = document.getElementById('powerBanner'), f = document.getElementById('powerFlash');
+  document.getElementById('pbIcon').textContent = P.icon; document.getElementById('pbName').textContent = P.name.toUpperCase();
+  b.style.setProperty('--pc', P.color); f.style.setProperty('--pc', P.color);
+  b.classList.remove('show'); f.classList.remove('on'); void b.offsetWidth; b.classList.add('show'); f.classList.add('on');
+}
+function setPowerUI() {   // icono/nombre/color del poder del personaje actual
+  const P = curPower(); if (!P) return;
+  [powerHud, tPow].forEach(el => el && el.style.setProperty('--pc', P.color));
+  phIcon.textContent = P.icon; phName.textContent = P.name.toUpperCase(); if (tPowIcon) tPowIcon.textContent = P.icon;
+  const role = document.getElementById('charRole'), cp = document.getElementById('charPower');
+  if (role) role.textContent = P.area;
+  if (cp) cp.innerHTML = `${P.icon} ${P.name.replace('<', '&lt;').replace('>', '&gt;')}<small>${P.desc}</small>`;
+}
+function updatePowerUI() {
+  const P = curPower(); if (!P) return;
+  const pct = player.powerCD > 0 ? Math.round((1 - player.powerCD / P.cd) * 100) : 100, ready = pct >= 100;
+  powerHud.style.setProperty('--p', pct); powerHud.classList.toggle('ready', ready);
+  phState.textContent = ready ? 'LISTO · tecla K' : 'recargando ' + player.powerCD.toFixed(1) + ' s';
+  if (tPow) { tPow.style.setProperty('--p', pct); tPow.classList.toggle('ready', ready); }
+  const on = player.slowT > 0 && game.state === 'play';
+  sprintFx.classList.toggle('on', on); if (on) sprintTEl.textContent = Math.ceil(player.slowT);
+}
+// golpear a un enemigo con un poder (al jefe le quita una vida con invulnerabilidad)
+function hurtEnemy(e) {
+  if (!e.alive) return false;
+  if (e.def.kind === 'boss') {
+    if (e.inv > 0) return false;
+    e.hp--; e.inv = 1.4; SFX.bosshit(); shake = 0.5;
+    if (e.hp <= 0) { killEnemy(e, 'boss'); bossDefeated(); } else toast(e.hp === 1 ? '¡UNO MÁS!' : '¡BIEN!', 800);
+    return true;
+  }
+  if (e.type === 'bullet') { e.alive = false; e.mode = 'gone'; levelGroup.remove(e.mesh); burstColor(e.x, e.y + 0.3, 0x333333, 10, 4); addScore(100); return true; }
+  killEnemy(e, 'flip'); return true;
+}
+const geoShapes = [new T.TetrahedronGeometry(0.42), new T.OctahedronGeometry(0.4), new T.BoxGeometry(0.55, 0.55, 0.55), new T.IcosahedronGeometry(0.4)];
+let shapeIdx = 0;
+function usePower() {
+  const p = player, P = curPower(), id = curPowerId();
+  if (!P || p.powerCD > 0 || p.dead || game.state !== 'play') return;
+  const cx = p.x, cy = p.y + p.h * 0.55, col = new T.Color(P.color);
+  if (id === 'Diego') {
+    // Estructura Estable: cúpula geodésica dorada + núcleo, invulnerable y destruye lo que toca
+    p.shieldT = 4.5; p.powerAnimT = 0.7; play('M_Victory', { loop: false, fade: 0.08, speed: 1.6 });
+    const g = new T.Group();
+    const cage = new T.Mesh(new T.IcosahedronGeometry(1.1, 1), new T.MeshBasicMaterial({ color: 0xffd23f, wireframe: true, transparent: true }));
+    const glow = new T.Mesh(new T.IcosahedronGeometry(1.0, 2), new T.MeshBasicMaterial({ color: 0xffa000, transparent: true, opacity: 0.35, depthWrite: false, blending: T.AdditiveBlending }));
+    cage.material.color.set(0xffc400); cage.material.blending = T.AdditiveBlending;
+    const cage2 = new T.Mesh(new T.OctahedronGeometry(1.35, 0), new T.MeshBasicMaterial({ color: 0xfff2a0, wireframe: true, transparent: true, opacity: 0.6 }));
+    const light = new T.PointLight(0xffc040, 1.6, 6, 1.6);
+    g.add(cage, glow, cage2, light);
+    addFx(g, 4.5, (o, k, dt) => {
+      const sc = (player.big ? 1.35 : 1) * (k < 0.08 ? k / 0.08 : 1) * (1 + Math.sin(k * 60) * 0.03);
+      o.position.set(player.x, player.y + player.h * 0.55, 0.2); o.scale.setScalar(sc);
+      cage.rotation.y += dt * 1.6; cage.rotation.x += dt * 0.7; cage2.rotation.y -= dt * 2.2; cage2.rotation.z += dt;
+      const blink = k > 0.75 && Math.floor(k * 40) % 2 === 0;   // parpadea cuando se va a acabar
+      cage.visible = cage2.visible = !blink; glow.material.opacity = (0.28 + Math.sin(k * 40) * 0.08) * (1 - k * 0.5);
+      if (player.dead) return true;
+    });
+    burstColor(cx, cy, 0xffd23f, 50, 8); ringFx(cx, cy, 0xffd23f, { to: 5 }); ringFx(p.x, p.y + 0.05, 0xffd23f, { flat: true, to: 4 });
+    floatText('{ ESTABLE }', '#ffd23f', cx, cy + 1.2, 0.9); SFX.powerup(); shake = 0.25;
+  } else if (id === 'Wilson') {
+    // Escudo SQL: golpe al suelo + onda expansiva que borra bugs, apaga fuego y destruye balas
+    p.powerAnimT = 0.45; play('M_Land', { loop: false, fade: 0.04 }); SFX.pound(); setTimeout(() => SFX.bosshit(), 90); shake = 0.7;
+    const R = 8.5, hit = new Set();
+    const wave = ringFx(cx, cy, 0x4ad8ff, { to: R, life: 0.75, width: 0.12, z: 0.6 });
+    ringFx(cx, cy, 0xffffff, { to: R * 0.85, life: 0.6, width: 0.05, z: 0.7 });
+    ringFx(p.x, p.y + 0.06, 0x4ad8ff, { flat: true, to: R, life: 0.8, width: 0.15 });
+    const grid = new T.Mesh(new T.SphereGeometry(1, 18, 12), new T.MeshBasicMaterial({ color: 0x4ad8ff, wireframe: true, transparent: true }));
+    grid.position.set(cx, cy, 0);
+    addFx(grid, 0.75, (o, k) => {
+      const r = 0.3 + R * (1 - (1 - k) * (1 - k)); o.scale.setScalar(r); o.rotation.y += 0.05; o.material.opacity = 0.7 * (1 - k);
+      enemies.forEach(e => { if (e.alive && !hit.has(e) && Math.hypot(e.x - cx, e.y + e.h / 2 - cy) < r) { hit.add(e); hurtEnemy(e); } });
+      fires.forEach(f => { if (f.t <= 0 && Math.hypot(f.x - cx, f.y - cy) < r) { f.t = 2.5; burstColor(f.x, f.y, 0x4ad8ff, 8, 3); } });
+    });
+    ['DELETE FROM bugs;', 'DROP TABLE errores;', 'COMMIT;', 'SELECT * FROM paz;'].forEach((t, i) =>
+      setTimeout(() => floatText(t, '#bff4ff', cx + (i - 1.5) * 2.4, cy + 1 + (i % 2) * 0.8, 0.7, 1.4), i * 110));
+    burstColor(cx, cy, 0x4ad8ff, 60, 10);
+  } else if (id === 'Juan') {
+    // Cálculo de Vector: figura geométrica que viaja en línea recta, con estela y flecha del vector
+    p.powerAnimT = 0.3; p.punchT = 0; play('M_Punch', { loop: false, fade: 0.04, speed: 2 }); SFX.fire();
+    const dir = p.facing, geo = geoShapes[shapeIdx++ % geoShapes.length];
+    const g = new T.Group();
+    const solidM = new T.Mesh(geo, new T.MeshStandardMaterial({ color: 0xb36bff, emissive: 0x6a1ad8, emissiveIntensity: 1.2, roughness: 0.3, metalness: 0.3 }));
+    const wire = new T.Mesh(geo, new T.MeshBasicMaterial({ color: 0xffffff, wireframe: true })); wire.scale.setScalar(1.15);
+    g.add(solidM, wire, new T.PointLight(0xb36bff, 1.2, 4, 1.6));
+    g.position.set(p.x + dir * 0.6, cy, 0.3);
+    let trailT = 0;
+    addFx(g, 0.95, (o, k, dt) => {
+      o.position.x += dir * 17 * dt; o.rotation.x += dt * 9; o.rotation.y += dt * 7;
+      trailT -= dt;
+      if (trailT <= 0) {   // estela de triángulos
+        trailT = 0.03;
+        const tr = new T.Mesh(geoShapes[0], new T.MeshBasicMaterial({ color: 0xd7a8ff, transparent: true, wireframe: Math.random() < 0.5 }));
+        tr.position.copy(o.position); tr.scale.setScalar(0.4);
+        addFx(tr, 0.35, (q, kk) => { q.scale.setScalar(0.4 * (1 - kk)); q.material.opacity = 1 - kk; q.rotation.z += 0.2; });
+      }
+      const tx = Math.floor(o.position.x), ty = Math.floor(o.position.y);
+      if (grid[tx] && grid[tx][ty]) {
+        const c = grid[tx][ty]; if (c === 'B' || c === '?' || c === 'M') hitBlock(tx, ty, true);
+        burstColor(o.position.x, o.position.y, 0xb36bff, 18, 5); return true;
+      }
+      for (const e of enemies) if (e.alive && Math.abs(e.x - o.position.x) < e.hw + 0.4 && o.position.y > e.y - 0.2 && o.position.y < e.y + e.h + 0.2) {
+        if (hurtEnemy(e)) { burstColor(o.position.x, o.position.y, 0xb36bff, 24, 6); floatText('✓ Q.E.D.', '#e2c8ff', o.position.x, o.position.y + 0.8, 0.6, 0.9); return true; }
+      }
+    });
+    // flecha del vector
+    const len = 3.2, arrow = new T.Group();
+    const shaft = new T.Mesh(new T.BoxGeometry(len, 0.06, 0.06), new T.MeshBasicMaterial({ color: 0xe2c8ff, transparent: true }));
+    shaft.position.x = dir * len / 2; arrow.add(shaft);
+    const head = new T.Mesh(new T.ConeGeometry(0.16, 0.4, 10), shaft.material); head.rotation.z = -dir * Math.PI / 2; head.position.x = dir * (len + 0.15); arrow.add(head);
+    arrow.position.set(p.x + dir * 0.4, cy + 0.75, 0.5);
+    addFx(arrow, 0.5, (o, k) => { shaft.material.opacity = 1 - k; o.scale.x = 0.3 + k * 0.7; });
+    floatText('v = (' + (dir * 17) + ', 0)', '#e2c8ff', p.x + dir * 2, cy + 1.45, 0.55, 0.8);
+  } else if (id === 'Carlos') {
+    // Sprint Ágil: el tiempo de los bugs va a 30 % durante 6 s, tú vas más rápido; notas adhesivas orbitan
+    p.slowT = 6; p.powerAnimT = 0.6; play('M_Victory', { loop: false, fade: 0.08, speed: 1.8 }); SFX.powerup();
+    const notes = new T.Group(), cols = ['#ffe680', '#ff9ad0', '#9af0b0', '#9ad0ff'], labels = ['US-1', 'TO DO', 'DONE', 'SPRINT'];
+    labels.forEach((l, i) => {
+      const c = document.createElement('canvas'); c.width = c.height = 64; const g2 = c.getContext('2d');
+      g2.fillStyle = cols[i]; g2.fillRect(0, 0, 64, 64); g2.fillStyle = '#333'; g2.font = 'bold 14px sans-serif'; g2.textAlign = 'center'; g2.fillText(l, 32, 36);
+      const n = new T.Mesh(new T.PlaneGeometry(0.55, 0.55), new T.MeshBasicMaterial({ map: new T.CanvasTexture(c), side: T.DoubleSide, transparent: true }));
+      n.userData.a = i / 4 * Math.PI * 2; notes.add(n);
+    });
+    addFx(notes, 6, (o, k, dt) => {
+      o.position.set(player.x, player.y + player.h * 0.55, 0.3);
+      o.children.forEach(n => { n.userData.a += dt * 2.4; n.position.set(Math.cos(n.userData.a) * 1.2, Math.sin(n.userData.a * 2) * 0.35, Math.sin(n.userData.a) * 0.8); n.rotation.y = -n.userData.a; n.material.opacity = k > 0.85 ? (1 - k) / 0.15 : 1; });
+      if (player.dead) return true;
+    });
+    ringFx(cx, cy, 0x39d98a, { to: 7, life: 0.9 }); burstColor(cx, cy, 0x39d98a, 40, 7);
+    floatText('¡SPRINT!', '#9af0b0', cx, cy + 1.3, 1);
+  } else if (id === 'Intructor') {
+    // Salto Coordinado (súper salto); el doble salto es pasivo
+    p.vy = 27; p.grounded = false; p.pound = false; p.airJumps = 1; p.powerAnimT = 0.4; play('M_Jump', { loop: false, fade: 0.04 }); SFX.spring();
+    for (let i = 0; i < 3; i++) setTimeout(() => ringFx(player.x, player.y + 0.1, 0xff8a1a, { flat: true, from: 0.4, to: 2.4 + i, life: 0.5 }), i * 70);
+    burstColor(p.x, p.y + 0.2, 0xff8a1a, 40, 7);
+    floatText('¡COORDINADOS!', '#ffd0a0', cx, cy + 1, 0.9);
+  } else if (id === 'Jhonny') {
+    // Dash Idiomático: un impulso por salto en el aire (en el suelo, ilimitado con recarga)
+    if (!p.grounded && !p.airDash) return;
+    if (!p.grounded) p.airDash = false;
+    p.dashT = 0.24; p.vy = 0; p.pound = false; SFX.jump(); setTimeout(() => SFX.swim(), 40);
+    const words = ['GO!', 'FAST!', 'NEXT!', "LET'S GO!", 'RUN!', 'WOW!'];
+    floatText(words[Math.floor(Math.random() * words.length)], '#ffc0dc', cx, cy + 1, 0.8, 0.9, -p.facing * 2);
+    ringFx(cx, cy, 0xff4a8a, { to: 2.5, life: 0.35 });
+  } else if (id === 'Fabian') {
+    // Render </>: puente de paneles de código que dura 6 s
+    const w = p.grounded ? 6 : 4, top = p.grounded ? p.y : p.y - 0.02;
+    const x0 = p.grounded ? (p.facing > 0 ? p.x + 0.3 : p.x - 0.3 - w) : p.x - w / 2;
+    if (!p.grounded) { p.vy = Math.max(p.vy, 0); }
+    p.powerAnimT = 0.35; play('M_Punch', { loop: false, fade: 0.04, speed: 2 });
+    const tags = ['</>', '{ }', '<div>', 'UI', 'CSS', '<app>'], g = new T.Group();
+    for (let i = 0; i < w; i++) {
+      const c = document.createElement('canvas'); c.width = 128; c.height = 64; const g2 = c.getContext('2d');
+      g2.fillStyle = '#0a2440'; g2.fillRect(0, 0, 128, 64); g2.strokeStyle = '#39a9ff'; g2.lineWidth = 6; g2.strokeRect(3, 3, 122, 58);
+      g2.fillStyle = '#9fd8ff'; g2.font = 'bold 30px monospace'; g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillText(tags[i % tags.length], 64, 34);
+      const tex = new T.CanvasTexture(c);
+      const m = new T.Mesh(new T.BoxGeometry(0.96, 0.4, 1.6), new T.MeshStandardMaterial({ map: tex, emissive: 0x39a9ff, emissiveMap: tex, emissiveIntensity: 0.9, transparent: true }));
+      const ord = p.facing > 0 || !p.grounded ? i : w - 1 - i;
+      m.position.x = -w / 2 + 0.5 + i; m.scale.setScalar(0.01); m.userData.d = ord * 0.06; g.add(m);
+    }
+    levelGroup.add(g);
+    const pl = { x: x0, y: top, w, type: 'tmp', life: 6, mesh: g, x0, y0: top, range: 0, speed: 0, t: 0, state: 'idle' };
+    g.position.set(x0 + w / 2, top - 0.2, 0); plats.push(pl);
+    tags.forEach((t, i) => i < 3 && setTimeout(() => floatText(t, '#9fd8ff', x0 + w / 2 + (i - 1) * 1.6, top + 1.2, 0.6, 0.9), i * 90));
+    for (let i = 0; i < w; i++) setTimeout(() => beep(900 + i * 120, 0.05, 'square', 0.03), i * 60);
+    burstColor(x0 + w / 2, top, 0x39a9ff, 30, 5);
+  }
+  p.powerCD = P.cd;
+  if (id !== 'Jhonny' && id !== 'Juan') powerBanner(P);
+  else if (!p.bannerShown) { powerBanner(P); p.bannerShown = true; }
+}
+// doble salto pasivo del Instructor
+function doubleJump(p) {
+  p.airJumps--; p.vy = JUMP * 0.92; p.jumpBuf = 0; SFX.jump(); setTimeout(() => SFX.spring(), 30);
+  play('M_Jump', { loop: false, fade: 0.04 });
+  ringFx(p.x, p.y + 0.05, 0xff8a1a, { flat: true, from: 0.3, to: 2, life: 0.4 });
+  ringFx(p.x, p.y + 0.3, 0xffd0a0, { from: 0.2, to: 1.4, life: 0.35 });
+  burstColor(p.x, p.y + 0.1, 0xff8a1a, 14, 4);
+}
+// estela del dash (Jhonny): partículas rosas + líneas de velocidad
+function dashTrail(p) {
+  const y = p.y + p.h * (0.2 + Math.random() * 0.7);
+  const line = new T.Mesh(new T.BoxGeometry(1.4, 0.05, 0.05), new T.MeshBasicMaterial({ color: Math.random() < 0.5 ? 0xff4a8a : 0xffffff, transparent: true }));
+  line.position.set(p.x - p.facing * 0.8, y, 0.4);
+  addFx(line, 0.3, (o, k) => { o.material.opacity = 1 - k; o.scale.x = 1 - k * 0.6; });
+  burstColor(p.x - p.facing * 0.3, p.y + p.h * 0.5, 0xff4a8a, 3, 1.5);
+}
+
 // ================= Entrada =================
 const keys = {}, pressed = {};
-const MAP = { jump: ['Space', 'ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], punch: ['KeyJ'] };
+const MAP = { jump: ['Space', 'ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], punch: ['KeyJ'], power: ['KeyK'] };
 addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} }
@@ -1126,6 +1373,8 @@ function updatePlayer(dt) {
   }
   if (game.state !== 'play') return;
 
+  for (const k of ['powerCD', 'shieldT', 'slowT', 'powerAnimT']) if (p[k] > 0) p[k] = Math.max(0, p[k] - dt);
+  if (pressed.power) usePower();
   const left = held('ArrowLeft', 'KeyA'), right = held('ArrowRight', 'KeyD');
   const run = held('ShiftLeft', 'ShiftRight'), down = held('ArrowDown', 'KeyS'), jumpHeld = held('Space', 'ArrowUp', 'KeyW');
 
@@ -1136,7 +1385,7 @@ function updatePlayer(dt) {
     p.crouch = p.grounded && down;
     let dir = (right ? 1 : 0) - (left ? 1 : 0);
     if (p.crouch || (p.punchT > 0 && p.grounded)) dir = 0;
-    const max = run ? RUN : WALK;
+    const max = (run ? RUN : WALK) * (p.slowT > 0 ? 1.35 : 1);
     if (dir) {
       const turning = Math.sign(p.vx) === -dir && Math.abs(p.vx) > 1;
       const acc = p.grounded ? (turning ? 50 : 26) : 18;
@@ -1161,7 +1410,7 @@ function updatePlayer(dt) {
     if (p.jumpBuf > 0 && p.coyote > 0 && !p.crouch) {
       p.vy = JUMP + Math.abs(p.vx) * 0.22; p.grounded = false; p.coyote = 0; p.jumpBuf = 0;
       SFX.jump(); play('M_Jump', { loop: false, fade: 0.05 });
-    }
+    } else if (pressed.jump && !p.grounded && p.coyote <= 0 && p.airJumps > 0 && !p.crouch && curPowerId() === 'Intructor') doubleJump(p);
     const g = (p.vy > 0 && jumpHeld) ? GRAV : GRAV * 1.8;
     p.vy = Math.max(-MAXFALL, p.vy - g * dt);
     }
@@ -1169,6 +1418,7 @@ function updatePlayer(dt) {
     if (pressed.down && !p.grounded && !WATER_LVL) { p.pound = true; p.poundT = 0; p.vx = 0; p.vy = 0; play('M_GroundPound', { loop: false, fade: 0.05, speed: 1.35 }); SFX.punch(); }
     if (pressed.punch && p.punchT <= 0 && !p.crouch && !p.pound) { p.punchT = 0.45; p.punchHit = false; play('M_Punch', { loop: false, fade: 0.05, speed: 1.4 }); SFX.punch(); }
   }
+  if (p.dashT > 0) { p.dashT -= dt; p.vx = p.facing * 21; p.vy = 0; p.pound = false; dashTrail(p); if (p.dashT <= 0) p.vx = p.facing * 9; }
   if (p.punchT > 0) { p.punchT -= dt; if (!p.punchHit && p.punchT < 0.3) { p.punchHit = true; doPunch(); } }
   const S = p.big ? SIZE.big : SIZE.small;
   p.hw = S.hw; p.h = p.crouch ? S.hc : S.h;
@@ -1200,6 +1450,7 @@ function updatePlayer(dt) {
     if (p.pound) { p.pound = false; poundLand(); }
     else if (fallV < -10) p.landT = 0.14;
   }
+  if (p.grounded) { p.airDash = true; p.airJumps = 1; }
   p.landT -= dt; p.invT -= dt;
   const cpx = levelSpec(game.level).checkpoint;
   if (p.x > cpx && game.checkpoint < cpx) { game.checkpoint = cpx; toast('CHECKPOINT', 1000); }
@@ -1214,7 +1465,8 @@ function updatePlayer(dt) {
 
 function chooseAnim() {
   const p = player;
-  if (p.dead || game.state !== 'play' || p.pound || p.punchT > 0) return;
+  if (p.dead || game.state !== 'play' || p.pound || p.punchT > 0 || p.powerAnimT > 0) return;
+  if (p.dashT > 0) { play('M_Run', { speed: 2.4, fade: 0.05 }); return; }
   if (!p.grounded && WATER_LVL) {
     play(actions.M_Swim ? 'M_Swim' : 'M_Fall', { speed: p.strokeT > 0 ? 2.3 : 0.85, fade: 0.25 });
     return;
@@ -1267,7 +1519,8 @@ function updateEnemies(dt) {
     if (e.y < -3) { e.alive = false; e.mode = 'fall'; }
     // tocar al jugador
     if (!p.dead && game.state === 'play' && Math.abs(e.x - p.x) < e.hw + p.hw && p.y < e.y + e.h && p.y + p.h > e.y) {
-      if (p.pound || (p.vy < 0 && p.y > e.y + e.h * 0.35)) {
+      if (p.shieldT > 0 || p.dashT > 0) { if (hurtEnemy(e)) burstColor(e.x, e.y + e.h / 2, new T.Color(curPower().color), 20, 6); }
+      else if (p.pound || (p.vy < 0 && p.y > e.y + e.h * 0.35)) {
         killEnemy(e, 'stomp');
         if (!p.pound) { p.vy = held('Space', 'ArrowUp', 'KeyW') ? 15 : 10; play('M_Jump', { loop: false, fade: 0.05 }); }
       } else if (p.invT <= 0) damage();
@@ -1327,8 +1580,9 @@ function update(dt) {
   if (game.state === 'play' || game.state === 'win' || game.state === 'won') {
     if (game.state === 'play') updatePlats(dt);
     updatePlayer(dt);
-    if (game.state === 'play') { updateFires(dt); updateCannons(dt); }
-    if (game.state === 'play') { chooseAnim(); updateEnemies(dt); game.time -= dt; if (game.time <= 0 && !player.dead) { game.time = 0; die(); } }
+    const sf = player.slowT > 0 ? 0.3 : 1;   // Sprint Ágil
+    if (game.state === 'play') { updateFires(dt * sf); updateCannons(dt * sf); }
+    if (game.state === 'play') { chooseAnim(); updateEnemies(dt * sf); game.time -= dt; if (game.time <= 0 && !player.dead) { game.time = 0; die(); } }
   }
   for (const k in pressed) pressed[k] = false;
 
@@ -1337,7 +1591,7 @@ function update(dt) {
     player.strokeT = (player.strokeT || 0) - dt;
     // nadando: el cuerpo se acuesta (gira sobre el centro de la caja de colisión)
     const swimming = WATER_LVL && game.state === 'play' && !player.dead && !player.grounded;
-    player.tilt = (player.tilt || 0) + ((swimming ? -1.15 : 0) - (player.tilt || 0)) * Math.min(1, dt * 6);
+    player.tilt = (player.tilt || 0) + ((swimming ? -1.15 : player.dashT > 0 ? -0.6 : 0) - (player.tilt || 0)) * Math.min(1, dt * (player.dashT > 0 ? 20 : 6));
     const hh = player.h * 0.5, fs = player.facing > 0 ? 1 : -1;
     model.position.set(player.x + fs * hh * Math.sin(player.tilt), player.y + hh - hh * Math.cos(player.tilt), 0);
     model.rotation.z = player.tilt;
@@ -1348,6 +1602,7 @@ function update(dt) {
     let sc = player.big ? SIZE.big.scale : SIZE.small.scale;
     if (player.growT > 0) { player.growT -= dt; sc = Math.floor(player.growT * 12) % 2 ? SIZE.small.scale : SIZE.big.scale; }
     model.scale.setScalar(sc);
+    if (player.dashT > 0) model.scale.set(sc * 1.25, sc * 0.85, sc);   // estirado del dash
     model.visible = player.dead || player.invT <= 0 || Math.floor(player.invT * 15) % 2 === 0;
     mixer.update(dt);
   }
@@ -1365,7 +1620,7 @@ function update(dt) {
   }
   const tnow = performance.now() / 1000;
   coins.forEach(c => { if (!c.taken) { c.m.rotation.y = tnow * 2.2 + c.ph; c.m.position.y = c.y + Math.sin(tnow * 3 + c.ph) * 0.08; } });
-  updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateSparks(dt);
+  updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateSparks(dt); updatePfx(dt); updatePowerUI();
   if (MAT.lava.map) { MAT.lava.map.offset.x = tnow * 0.05; MAT.lava.map.offset.y = Math.sin(tnow * 0.7) * 0.04; MAT.lava.emissiveIntensity = 0.8 + Math.sin(tnow * 3) * 0.15; }
   if (flag) flag.userData.cloth.rotation.y = Math.sin(tnow * 3) * 0.15;
 
@@ -1440,6 +1695,7 @@ function updateCharUI() {
   }
   [...charDotsEl.children].forEach((c, i) => c.classList.toggle('on', i === charIdx));
   charNameEl.textContent = CHARS[charIdx][1].toUpperCase();
+  setPowerUI();
   charNameEl.classList.remove('pop'); void charNameEl.offsetWidth; charNameEl.classList.add('pop');
 }
 let menuIdleTimer = 0;
@@ -1810,7 +2066,9 @@ Promise.all(enemyEntries.map(([name, b64]) =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (tm) setTimeout(() => {
+  if (tm) setTimeout(async () => {
+    const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
+    if (tc) await selectChar(CHARS.findIndex(c => c[0] === tc[1]));
     try {
       game.world = (+tm[2]) - 1;
       if (tm[1]) showMap({ banner: true }); else startLevel((+tm[3]) - 1);

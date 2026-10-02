@@ -38,7 +38,8 @@
           <button id="prevChar" aria-label="Anterior">&#9664;</button>
           <div class="sel-text">
             <div id="charName">DIEGO</div>
-            <div class="role">Instructor ADSO</div>
+            <div class="role" id="charRole">Instructor ADSO</div>
+            <div class="cpow" id="charPower"></div>
           </div>
           <button id="nextChar" aria-label="Siguiente">&#9654;</button>
         </div>
@@ -54,6 +55,7 @@
       <span><kbd>Espacio</kbd> saltar</span>
       <span><kbd>S</kbd> agacharse / <b>ground pound</b> en el aire</span>
       <span><kbd>J</kbd> puñetazo</span>
+      <span><kbd>K</kbd> <b>poder del instructor</b></span>
       <span><kbd>M</kbd> sonido &nbsp;<kbd>R</kbd> reiniciar</span>
     </div>
   </div>
@@ -75,6 +77,12 @@
     <div class="mb-name" id="mbName"></div>
     <div class="mb-row"><span id="mbChar">DIEGO</span><img id="mbPortrait" alt=""><span>&times;</span><span id="mbLives">3</span></div>
   </div>
+
+  <!-- Poderes -->
+  <div id="powerHud"><div class="ph-ring"><span id="phIcon">&#9889;</span></div><div class="ph-txt"><b id="phName">PODER</b><small id="phState">LISTO &middot; tecla K</small></div></div>
+  <div id="powerFlash"></div>
+  <div id="powerBanner"><span id="pbIcon"></span><span id="pbName"></span></div>
+  <div id="sprintFx"><span>TO DO</span><span>DOING</span><span>DONE</span><b id="sprintT"></b></div>
 
   <!-- Jefe -->
   <div id="bossBar"><span>&#9760; BUG REY</span><div class="bb"><i id="bossFill"></i></div></div>
@@ -105,6 +113,7 @@
       <button class="tb tb-b" data-key="ShiftLeft">B<small>correr</small></button>
       <button class="tb tb-j" data-key="KeyJ">&#128074;</button>
       <button class="tb tb-a" data-key="Space">A<small>saltar</small></button>
+      <button class="tb tb-p" id="tPow" data-key="KeyK"><span id="tPowIcon">&#9889;</span><small>poder</small></button>
     </div>
     <div id="tTop">
       <button class="ts" data-key="Escape">&#10074;&#10074;</button>

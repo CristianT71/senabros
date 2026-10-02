@@ -377,3 +377,62 @@ body.touch.map.tedit .tb-b, body.touch.map.tedit .tb-j { display: flex; }
 body.touch #hud { right: 160px; }
 /* el contenedor de botones ocupa toda la pantalla: no debe tapar la cruceta */
 body.touch #touch > #tBtns { pointer-events: none; }
+
+/* ================= Poderes ================= */
+.cpow { font-size: 12px; font-weight: 900; margin-top: 4px; color: var(--gold); letter-spacing: 1px; }
+.cpow small { display: block; font-size: 10px; color: #d7f5c6; letter-spacing: 0; font-weight: 700; margin-top: 2px; }
+#powerHud {
+  position: fixed; left: 16px; bottom: 16px; z-index: 4; display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px;
+  background: #0009; border: 2px solid #fff6; border-radius: 40px; font-weight: 900; pointer-events: none; transition: opacity .3s;
+}
+body.menu #powerHud, body.map #powerHud, body.touch #powerHud { opacity: 0; }
+.ph-ring {
+  width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; font-size: 24px;
+  background: conic-gradient(var(--pc, #ffd23f) calc(var(--p, 100) * 1%), #ffffff22 0); position: relative;
+}
+.ph-ring::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: #0b1a10; }
+.ph-ring span { position: relative; font-size: 22px; font-family: monospace; font-weight: 900; }
+#powerHud.ready .ph-ring { box-shadow: 0 0 18px var(--pc); animation: pulse2 1s ease-in-out infinite; }
+@keyframes pulse2 { 50% { transform: scale(1.08); } }
+.ph-txt b { display: block; font-size: 14px; letter-spacing: 1px; color: var(--pc, #ffd23f); }
+.ph-txt small { font-size: 11px; color: #e8f5e0; }
+
+#powerFlash { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 62%, var(--pc, #fff) 0%, transparent 62%); mix-blend-mode: screen; }
+#powerFlash.on { animation: pflash .55s ease-out; }
+@keyframes pflash { 0% { opacity: .95; } 100% { opacity: 0; } }
+#powerBanner {
+  position: fixed; left: 50%; top: 20%; z-index: 7; display: flex; align-items: center; gap: 14px; pointer-events: none;
+  padding: 8px 60px; opacity: 0; transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, transparent, var(--pc, #ffd23f) 22%, var(--pc, #ffd23f) 78%, transparent);
+  font: italic 900 36px "Trebuchet MS", sans-serif; letter-spacing: 3px; color: #fff; white-space: nowrap;
+  -webkit-text-stroke: 2px #08130a; paint-order: stroke fill; text-shadow: 0 4px 0 #08130a;
+}
+#powerBanner #pbIcon { font-size: 40px; font-family: monospace; }
+#powerBanner.show { animation: pban 1.3s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes pban {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.3) skewX(-20deg); }
+  14% { opacity: 1; transform: translate(-50%, -50%) scale(1.18) skewX(-8deg); }
+  24% { transform: translate(-50%, -50%) scale(1) skewX(-8deg); }
+  78% { opacity: 1; transform: translate(-50%, -50%) scale(1) skewX(-8deg); }
+  100% { opacity: 0; transform: translate(-50%, -80%) scale(1.05) skewX(-8deg); }
+}
+#sprintFx {
+  position: fixed; inset: 0; z-index: 3; pointer-events: none; display: none; justify-content: space-around; align-items: flex-start;
+  padding-top: 70px; box-shadow: inset 0 0 140px #39d98acc; background: linear-gradient(180deg, #39d98a22, transparent 40%);
+}
+#sprintFx.on { display: flex; animation: fadeIn .3s; }
+#sprintFx span { font: 900 18px monospace; letter-spacing: 4px; color: #39d98a99; border-bottom: 3px solid #39d98a66; padding: 0 30px 4px; }
+#sprintFx b { position: absolute; left: 50%; top: 110px; transform: translateX(-50%); font: 900 48px monospace; color: #ffffffcc; text-shadow: 0 0 20px #39d98a; }
+/* botón de poder (celular) */
+.tb-p { width: 66px; height: 66px; font-size: 24px; color: #fff;
+  background: radial-gradient(circle at 50% 50%, #0b1a10 58%, transparent 60%), conic-gradient(var(--pc, #ffd23f) calc(var(--p, 100) * 1%), #ffffff33 0); }
+.tb-p span { font-family: monospace; font-weight: 900; }
+.tb-p.ready { box-shadow: 0 0 18px var(--pc), 0 5px 0 #0009; }
+body.touch.map .tb-p { display: none; }
+body.touch.map.tedit .tb-p { display: flex; }
+@media (max-height: 520px) {
+  #powerBanner { font-size: 22px; padding: 6px 40px; } #powerBanner #pbIcon { font-size: 26px; }
+  #sprintFx { padding-top: 46px; } #sprintFx span { font-size: 12px; } #sprintFx b { top: 70px; font-size: 30px; }
+  .cpow { font-size: 10px; margin-top: 2px; } .cpow small { display: none; }
+}

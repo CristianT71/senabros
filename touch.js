@@ -13,14 +13,14 @@ const tap = code => { down(code); setTimeout(() => up(code), 60); };
 const inMenu = () => document.body.classList.contains('menu');
 const inMap = () => document.body.classList.contains('map');
 const pad = document.getElementById('tPad'), knob = document.getElementById('tKnob');
-const btns = { A: document.querySelector('.tb-a'), B: document.querySelector('.tb-b'), J: document.querySelector('.tb-j') };
+const btns = { A: document.querySelector('.tb-a'), B: document.querySelector('.tb-b'), J: document.querySelector('.tb-j'), P: document.querySelector('.tb-p') };
 
 // ================= Ajustes guardados =================
 const KEY = 'senabros_controls';
-const DEFAULTS = { pad: [13, 72], A: [91, 76], B: [79, 87], J: [81, 60], padS: 1, btnS: 1, op: 0.88, vib: true, swap: false };
+const DEFAULTS = { pad: [13, 72], A: [91, 76], B: [79, 87], J: [81, 60], P: [69, 72], padS: 1, btnS: 1, op: 0.88, vib: true, swap: false };
 let cfg = load();
 function load() {
-  try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (_) { return Object.assign({}, DEFAULTS); }
+  try { const c = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || '{}')); if (!Array.isArray(c.P)) c.P = DEFAULTS.P; return c; } catch (_) { return Object.assign({}, DEFAULTS); }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (_) {} }
 const mirror = ([x, y]) => [100 - x, y];
