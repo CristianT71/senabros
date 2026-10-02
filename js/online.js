@@ -37,15 +37,20 @@ const ago = iso => {
 
 // ---------- sesión y perfil ----------
 async function loadProfile() {
+  if (loadingProfile) return; loadingProfile = true;
+  try { await loadProfileInner(); } finally { loadingProfile = false; }
+}
+async function loadProfileInner() {
   const { data: { session } } = await db.auth.getSession();
   state.user = session ? session.user : null;
   if (!state.user) { state.profile = null; return render(); }
-  const { data, error } = await db.from('profiles').select('id,username,player_code,character_name,last_seen').eq('id', state.user.id).maybeSingle();
+  const { data, error } = await db.from('profiles').select('id,username,player_code,character_name,last_seen,username_changed').eq('id', state.user.id).maybeSingle();
   state.profile = error ? null : data;
   render();
   if (state.profile) { await syncDown(); loadFriends(); db.rpc('touch_presence'); }
 }
-db.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT') { state.user = state.profile = null; state.friends = state.incoming = state.outgoing = []; render(); } });
+let loadingProfile = false;
+db.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_IN' && !state.profile && !loadingProfile) loadProfile(); if (ev === 'SIGNED_OUT') { state.user = state.profile = null; state.friends = state.incoming = state.outgoing = []; render(); } });
 setInterval(() => { if (state.profile) db.rpc('touch_presence'); }, 60000);
 
 // ---------- progreso en la nube ----------
@@ -116,7 +121,7 @@ function render() {
   chip.title = p ? `Tu ID: ${p.player_code}` : 'Guarda tu progreso y juega con amigos';
   $('acctOut').hidden = !!p; $('acctIn').hidden = !p;
   if (p) {
-    $('meName').textContent = p.username; $('meCode').textContent = p.player_code;
+    $('meName').textContent = p.username; $('meCode').textContent = p.player_code; $('meRename').hidden = !!p.username_changed;
     renderFriends();
   } else {
     $('tabLogin').classList.toggle('on', state.tab === 'login'); $('tabSignup').classList.toggle('on', state.tab === 'signup');
@@ -188,6 +193,19 @@ $('acctForm').addEventListener('submit', submit);
 $('acctLogout').onclick = async () => { await db.auth.signOut(); modal.classList.remove('show'); };
 $('acctDelete').onclick = deleteAccount;
 $('fGo').onclick = search;
+$('acctGoogle').onclick = async () => {
+  const btn = $('acctGoogle'); btn.disabled = true; setMsg('Abriendo Google...', true);
+  const { error } = await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
+  if (error) { setMsg(friendly(error)); btn.disabled = false; }
+};
+$('meRename').onclick = async () => {
+  const n = (prompt('Elige tu usuario (3 a 16 letras, números o _). Solo podrás cambiarlo una vez:', state.profile.username) || '').trim();
+  if (!n || n === state.profile.username) return;
+  if (!USER_RE.test(n)) return setMsg('Usuario inválido: 3 a 16 letras, números o _');
+  const { error } = await db.rpc('change_username', { new_name: n });
+  if (error) return setMsg(friendly(error));
+  setMsg('¡Usuario cambiado!', true); await loadProfile();
+};
 $('fSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
 $('meCopy').onclick = () => { navigator.clipboard?.writeText($('meCode').textContent); setMsg('ID copiado', true); };
 

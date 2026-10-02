@@ -490,3 +490,10 @@ body.touch.menu .chip { right: 66px; }
   .chip { top: 8px; padding: 5px 12px; font-size: 12px; } .acct-card { padding: 10px 14px; } .acct-sub { margin-bottom: 6px; }
   .go { padding: 8px 0; font-size: 15px; }
 }
+
+.gbtn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px 0; border-radius: 12px; border: 3px solid var(--ink);
+  background: #fff; color: #222; font: 800 15px "Trebuchet MS", sans-serif; cursor: pointer; box-shadow: 0 4px 0 var(--ink); margin-bottom: 4px; }
+.gbtn:disabled { opacity: .6; }
+.or { display: flex; align-items: center; gap: 10px; margin: 10px 0 10px; font-size: 11px; color: #bcd6b4; letter-spacing: 1px; }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: #ffffff33; }
+.me > div { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
