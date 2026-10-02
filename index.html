@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0b1a10">
+  <title>SENA Bros</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="menu">
+  <div id="game"></div>
+
+  <div id="hud">
+    <div><small>PUNTOS</small><span id="score">000000</span></div>
+    <div><small>MONEDAS</small><span id="coins">x00</span></div>
+    <div><small>MUNDO</small><span id="worldLabel">1-1</span></div>
+    <div><small>TIEMPO</small><span id="time">300</span></div>
+    <div><small>VIDAS</small><span id="lives">3</span></div>
+  </div>
+
+  <div id="overlay" class="show">
+    <div class="rays"></div>
+    <div class="menu-col">
+      <div class="logo">
+        <div class="logo-top">SENA</div>
+        <div class="logo-bottom">BROS</div>
+        <div class="shine"></div>
+      </div>
+      <div class="subtitle">Instructores ADSO vs. los bugs &middot; Yamboró</div>
+      <p id="overlayText" class="status"></p>
+
+      <div class="panel">
+        <div class="panel-title">ELIGE TU INSTRUCTOR</div>
+        <div id="charDots" class="roster"></div>
+        <div class="selected">
+          <button id="prevChar" aria-label="Anterior">&#9664;</button>
+          <div class="sel-text">
+            <div id="charName">DIEGO</div>
+            <div class="role">Instructor ADSO</div>
+          </div>
+          <button id="nextChar" aria-label="Siguiente">&#9654;</button>
+        </div>
+      </div>
+
+      <button id="startBtn">&#9654; JUGAR</button>
+      <div class="hint"><kbd>&larr;</kbd><kbd>&rarr;</kbd> elegir &nbsp;&middot;&nbsp; <kbd>ENTER</kbd> jugar</div>
+    </div>
+
+    <div class="controls">
+      <span><kbd>A</kbd><kbd>D</kbd> mover</span>
+      <span><kbd>Shift</kbd> correr</span>
+      <span><kbd>Espacio</kbd> saltar</span>
+      <span><kbd>S</kbd> agacharse / <b>ground pound</b> en el aire</span>
+      <span><kbd>J</kbd> puñetazo</span>
+      <span><kbd>M</kbd> sonido &nbsp;<kbd>R</kbd> reiniciar</span>
+    </div>
+  </div>
+
+  <!-- Mapa del mundo -->
+  <div id="mapTop">
+    <img id="mapPortrait" alt="">
+    <div><b id="mapChar">DIEGO</b> &times; <span id="mapLives">3</span></div>
+    <div class="sep"></div>
+    <div>MONEDAS <b id="mapCoins">00</b></div>
+    <div>PUNTOS <b id="mapScore">000000</b></div>
+  </div>
+  <div id="mapInfo">
+    <div id="mapNode">INICIO</div>
+    <div class="mk"><kbd>&larr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd> caminar &nbsp;&middot;&nbsp; <kbd>ENTER</kbd> entrar al nivel &nbsp;&middot;&nbsp; <kbd>ESC</kbd> menú</div>
+  </div>
+  <div id="mapBanner">
+    <div class="mb-world" id="mbWorld">MUNDO 1</div>
+    <div class="mb-name" id="mbName"></div>
+    <div class="mb-row"><span id="mbChar">DIEGO</span><img id="mbPortrait" alt=""><span>&times;</span><span id="mbLives">3</span></div>
+  </div>
+
+  <!-- Jefe -->
+  <div id="bossBar"><span>&#9760; BUG REY</span><div class="bb"><i id="bossFill"></i></div></div>
+
+  <!-- Gloria al terminar un mundo -->
+  <div id="glory">
+    <div class="g-rays"></div>
+    <div id="confetti"></div>
+    <div class="g-card">
+      <div class="g-trophy">&#127942;</div>
+      <div class="g-title" id="gTitle">&iexcl;MUNDO 1 COMPLETADO!</div>
+      <div class="g-sub" id="gSub">Yamboró quedó libre de bugs</div>
+      <div class="g-who"><img id="gPortrait" alt=""><b id="gChar">DIEGO</b></div>
+      <div class="g-stats">
+        <div><small>PUNTOS</small><b id="gScore">0</b></div>
+        <div><small>MONEDAS</small><b id="gCoins">0</b></div>
+        <div><small>VIDAS</small><b id="gLives">0</b></div>
+      </div>
+      <div class="g-bonus" id="gBonus">BONO +5000 &middot; +1 VIDA</div>
+      <button id="gBtn">CONTINUAR &#9654;</button>
+    </div>
+  </div>
+
+  <!-- Controles táctiles (solo en celular) -->
+  <div id="touch">
+    <div id="tPad"><div class="arr l">&#9664;</div><div class="arr r">&#9654;</div><div class="arr u">&#9650;</div><div class="arr d">&#9660;</div><div id="tKnob"></div></div>
+    <div id="tBtns">
+      <button class="tb tb-b" data-key="ShiftLeft">B<small>correr</small></button>
+      <button class="tb tb-j" data-key="KeyJ">&#128074;</button>
+      <button class="tb tb-a" data-key="Space">A<small>saltar</small></button>
+    </div>
+    <div id="tTop">
+      <button class="ts" data-key="Escape">&#10074;&#10074;</button>
+      <button class="ts" id="tFull">&#x26F6;</button>
+    </div>
+  </div>
+  <div id="rotate"><div class="phone">&#128241;</div><b>Gira tu celular</b><span>SENA BROS se juega en horizontal</span></div>
+
+  <div id="wipe"></div>
+  <div id="toast"></div>
+
+  <div id="loading">
+    <div class="logo">
+      <div class="logo-top">SENA</div>
+      <div class="logo-bottom">BROS</div>
+    </div>
+    <div class="load-bar"><div id="loadBar"></div></div>
+    <div id="loadText">Cargando Yamboró...</div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="enemies_data.js"></script>
+  <script src="bg_data.js"></script>
+  <script src="portraits.js"></script>
+  <script src="game.js"></script>
+  <script src="touch.js"></script>
+</body>
+</html>
