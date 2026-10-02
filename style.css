@@ -375,3 +375,5 @@ body.touch.menu.tedit #tPad, body.touch.menu.tedit #tBtns { display: block; }
 body.touch.map.tedit .tb-b, body.touch.map.tedit .tb-j { display: flex; }
 
 body.touch #hud { right: 160px; }
+/* el contenedor de botones ocupa toda la pantalla: no debe tapar la cruceta */
+body.touch #touch > #tBtns { pointer-events: none; }
