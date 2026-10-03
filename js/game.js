@@ -893,14 +893,19 @@ let toastTimer = 0;
 function toast(t, ms = 1500) { toastEl.textContent = t; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms); }
 
 let netMute = false;   // true mientras se aplica un evento de otro jugador (no da puntos ni misiones)
-function net(type, payload) { if (game.mp && !netMute && window.SENA_NET) window.SENA_NET.send(type, payload); }
+const RACE_EVENTS = new Set(['finish', 'stomp', 'loot']);
+function net(type, payload) {
+  if (!game.mp || netMute || !window.SENA_NET) return;
+  if (game.mp.mode === 'race' && !RACE_EVENTS.has(type)) return;   // en carrera no se comparten bugs, bloques ni monedas
+  window.SENA_NET.send(type, payload);
+}
 function addScore(n) { if (netMute) return; game.score += n; }
 function addCoinCount() { if (netMute) return; game.coins++; addScore(200); addEnergy(1); missionProgress('coins'); SFX.coin(); if (game.coins % 50 === 0) { game.lives++; SFX.oneup(); toast('1-UP!'); } }
 
 function resetPlayer(x) {
   Object.assign(player, { x, y: 2, vx: 0, vy: 0, facing: 1, grounded: false, crouch: false, pound: false, punchT: 0, landT: 0, dead: false, deadT: 0, invT: 1.2, rot: 0,
     big: false, growT: 0, hw: SIZE.small.hw, h: SIZE.small.h,
-    powerCD: 0, shieldT: 0, dashT: 0, slowT: 0, powerAnimT: 0, airDash: true, airJumps: 1 });
+    powerCD: 0, shieldT: 0, dashT: 0, slowT: 0, powerAnimT: 0, airDash: true, airJumps: 1, stunT: 0, safeX: x, safeY: 2 });
   play('M_Idle', { fade: 0.05 });
 }
 // entra a un nivel (índice 0..5)
@@ -929,7 +934,7 @@ function transition(fn) {
   }, 460);
 }
 function completeLevel() {
-  if (game.mp) { if (window.SenaMP) SenaMP.levelDone({ coins: game.coins, kills: game.runKills || 0, score: game.score }); return; }
+  if (game.mp) { if (!game.mp.sent) { game.mp.sent = true; if (window.SenaMP) SenaMP.levelDone(mpStats()); } return; }
   if (game.challenge) { finishChallenge(); return; }
   recordBest();
   const w = game.world, n = game.level + 1, pg = game.progress;
@@ -966,14 +971,16 @@ async function ensureRemote(uid, name, file) {
     r.model = m; r.mixer = new T.AnimationMixer(m); r.actions = {}; r.cur = null; r.curName = '';
     g.animations.filter(c => c.name.startsWith('M_')).forEach(c => { r.actions[c.name] = r.mixer.clipAction(c); });
     r.tag = textSprite(name, '#ffd23f', 0.55); r.tag.material.depthTest = true;
-    scene.add(m); scene.add(r.tag); m.visible = r.tag.visible = r.has;
+    r.helpTag = textSprite('AYUDA', '#9af0ff', 0.5); r.helpTag.visible = false;
+    m.traverse(o => { if (o.isMesh) o.material = o.material.clone(); });   // materiales propios (para volverlo fantasma)
+    scene.add(m); scene.add(r.tag); scene.add(r.helpTag); m.visible = r.tag.visible = r.has;
     remotePlay(r, r.anim, r.speed);
   } catch (err) { console.error('no se pudo cargar el modelo de', name, err); }
   return r;
 }
 function removeRemote(uid) {
   const r = remotes.get(uid); if (!r) return;
-  if (r.model) scene.remove(r.model); if (r.tag) scene.remove(r.tag);
+  if (r.model) scene.remove(r.model); if (r.tag) scene.remove(r.tag); if (r.helpTag) scene.remove(r.helpTag);
   if (r.mixer) r.mixer.stopAllAction();
   remotes.delete(uid);
 }
@@ -983,7 +990,7 @@ function updateRemotes(dt) {
   remotes.forEach(r => {
     if (!r.model) return;
     const vis = show && r.has && now - r.last < 6000;   // si deja de enviar 6 s, se oculta
-    r.model.visible = r.tag.visible = vis;
+    r.model.visible = r.tag.visible = vis; if (r.helpTag) r.helpTag.visible = vis && r.ghost;
     if (!vis) return;
     // extrapolación corta con su velocidad + suavizado hacia la posición recibida
     const age = Math.min(0.25, (now - r.last) / 1000);
@@ -996,12 +1003,14 @@ function updateRemotes(dt) {
     r.model.position.set(r.x + fs * hh * Math.sin(r.tilt), r.y + hh - hh * Math.cos(r.tilt), -0.35);
     r.model.rotation.set(0, r.rot, r.tilt); r.model.scale.setScalar(r.sc);
     r.tag.position.set(r.x, r.y + 1.55 * r.sc + 0.35, 0.4);
+    if (r.ghost) { const bob = Math.sin(now / 260) * 0.12; r.model.position.y += 0.4 + bob; r.helpTag.position.set(r.x, r.y + 1.55 * r.sc + 0.95 + bob, 0.45); }
     r.mixer.update(dt);
   });
 }
 function applyRemoteState(uid, st) {
   const r = remotes.get(uid); if (!r) return;
-  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d;
+  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d; r.fin = !!st.fin;
+  if (!!st.g !== !!r.ghost) { r.ghost = !!st.g; if (r.model) setModelOpacity(r.model, r.ghost ? 0.38 : 1); if (r.helpTag) r.helpTag.visible = r.ghost; }
   r.last = performance.now();
   if (!r.has) { r.has = true; r.x = st.x; r.y = st.y; }
   if (st.a && r.model && (st.a !== r.curName || Math.abs((st.s || 1) - (r.cur ? r.cur.timeScale : 1)) > 0.05)) remotePlay(r, st.a, st.s || 1);
@@ -1026,7 +1035,14 @@ function applyRemoteEvent(uid, name, type, p) {
         if (e.hp <= 0) { killEnemy(e, 'boss'); bossDefeated(); }
       }
     } else if (type === 'finish') {
-      if (game.state === 'play' && !player.dead) { toast(name + ' llegó a la meta', 2200); netMute = false; startWin(true); }
+      if (game.mp.mode === 'race') raceFinished(uid, name, p.t);
+      else if (game.state === 'play' && !player.dead) { toast(name + ' llegó a la meta', 2200); netMute = false; if (player.ghost) reviveSelf(null, true); startWin(true); }
+    } else if (type === 'revive') {
+      if (p.u === game.mp.me && player.ghost) reviveSelf(name);
+    } else if (type === 'stomp') {
+      if (p.u === game.mp.me) gotStomped(uid, name);
+    } else if (type === 'loot') {
+      if (p.u === game.mp.me && p.n > 0) { netMute = false; game.coins += p.n; addScore(p.n * 200); toast('Le robaste ' + p.n + ' monedas a ' + name, 1600); SFX.coin(); }
     }
   } finally { netMute = false; }
 }
@@ -1034,19 +1050,24 @@ function localNetState() {
   if (!game.mp || !model || !(game.state === 'play' || game.state === 'win' || game.state === 'won')) return null;
   const r2 = v => Math.round(v * 100) / 100;
   return { x: r2(player.x), y: r2(player.y), vx: r2(player.vx), vy: r2(player.vy), f: player.facing, a: curName, s: r2(cur ? cur.timeScale : 1),
-    d: player.dead ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x) };
+    d: player.dead ? 1 : 0, g: player.ghost ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x), fin: game.mp.finished ? 1 : 0 };
 }
 function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}], me }
   stopMP();
-  game.mp = { me: opts.me };
+  game.mp = { me: opts.me, mode: opts.mode === 'race' ? 'race' : 'coop', order: [], finished: false, sent: false, t0: performance.now(), raceLeft: 0, names: {} };
+  opts.players.forEach(q => { game.mp.names[q.uid] = q.name; });
   opts.players.filter(q => q.uid !== opts.me).forEach(q => ensureRemote(q.uid, q.name, q.char));
   Object.assign(game, { score: 0, coins: 0, lives: 3, energy: 0, challenge: null });
   game.world = opts.world - 1; MAPN = WORLDS[game.world].nodes;
   startLevel(opts.level - 1);
-  worldLabel.textContent = 'EN LINEA';
+  worldLabel.textContent = game.mp.mode === 'race' ? 'CARRERA' : 'EN EQUIPO';
+  document.body.classList.add('mplevel'); document.body.classList.toggle('race', game.mp.mode === 'race');
 }
 function stopMP() {
   [...remotes.keys()].forEach(removeRemote);
+  if (player.ghost) endGhost();
+  chatBubbles.splice(0).forEach(b => scene.remove(b.obj));
+  document.body.classList.remove('mplevel', 'race'); ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
   game.mp = null;
 }
 window.SENA_MP = {
@@ -1062,7 +1083,235 @@ window.SENA_MP = {
   levels: () => [0, 1].flatMap(w => Array.from({ length: WORLDS[w].count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name,
     open: i <= game.progress.done[w] && (w === 0 || game.progress.done[0] >= WORLDS[0].count) || i === 0 && w === 0 }))),
   char: () => CHARS[charIdx][0],
+  chat: (uid, kind, val) => { if (game.mp) showBubble(uid, kind, val); },
+  me: () => game.mp && game.mp.me,
 };
+
+
+// ================= Caritas de reacción (dibujadas; el juego no usa emojis del sistema) =================
+const FACE_IDS = ['risa', 'lloron', 'burla', 'enojado', 'sorpresa', 'fuego', 'corazon', 'pulgar'];
+const faceCache = {};
+function drawFace(id) {
+  if (faceCache[id]) return faceCache[id];
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const face = (fill = '#ffd23f') => { g.fillStyle = fill; g.strokeStyle = '#3a2400'; g.lineWidth = 6; g.beginPath(); g.arc(64, 64, 54, 0, 7); g.fill(); g.stroke(); };
+  const eye = (x, y, r = 7) => { g.fillStyle = '#2a1600'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); };
+  const drop = (x, y, s = 1) => { g.fillStyle = '#4ad8ff'; g.beginPath(); g.moveTo(x, y - 12 * s); g.quadraticCurveTo(x + 9 * s, y + 4 * s, x, y + 9 * s); g.quadraticCurveTo(x - 9 * s, y + 4 * s, x, y - 12 * s); g.fill(); };
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  if (id === 'risa') {
+    face(); g.strokeStyle = '#2a1600'; g.lineWidth = 6;
+    [[44, 52], [84, 52]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y + 6, 11, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); });
+    g.fillStyle = '#5a1a00'; g.beginPath(); g.moveTo(34, 72); g.quadraticCurveTo(64, 112, 94, 72); g.closePath(); g.fill();
+    g.fillStyle = '#ff6a8a'; g.beginPath(); g.ellipse(64, 92, 14, 7, 0, 0, 7); g.fill(); drop(20, 66); drop(108, 66);
+  } else if (id === 'lloron') {
+    face('#ffcf3a'); g.strokeStyle = '#2a1600'; g.lineWidth = 5;
+    g.beginPath(); g.moveTo(32, 40); g.lineTo(52, 46); g.moveTo(96, 40); g.lineTo(76, 46); g.stroke();
+    eye(44, 58, 6); eye(84, 58, 6);
+    g.fillStyle = '#4ad8ff'; g.fillRect(38, 64, 12, 52); g.fillRect(78, 64, 12, 52);
+    g.fillStyle = '#5a1a00'; g.beginPath(); g.ellipse(64, 92, 18, 12, 0, Math.PI, 0); g.fill();
+  } else if (id === 'burla') {
+    face(); g.strokeStyle = '#2a1600'; g.lineWidth = 6;
+    g.beginPath(); g.moveTo(34, 52); g.lineTo(54, 52); g.stroke(); eye(84, 50, 8);
+    g.beginPath(); g.moveTo(36, 78); g.quadraticCurveTo(64, 92, 94, 76); g.stroke();
+    g.fillStyle = '#ff4a6a'; g.strokeStyle = '#8a0020'; g.lineWidth = 3; g.beginPath(); g.ellipse(70, 94, 15, 18, 0.2, 0, Math.PI); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(70, 84); g.lineTo(72, 104); g.stroke();
+  } else if (id === 'enojado') {
+    face('#ff8a4a'); g.strokeStyle = '#2a1600'; g.lineWidth = 7;
+    g.beginPath(); g.moveTo(30, 38); g.lineTo(56, 52); g.moveTo(98, 38); g.lineTo(72, 52); g.stroke();
+    eye(46, 62, 7); eye(82, 62, 7);
+    g.beginPath(); g.moveTo(40, 96); g.quadraticCurveTo(64, 78, 88, 96); g.stroke();
+  } else if (id === 'sorpresa') {
+    face(); g.fillStyle = '#fff'; g.strokeStyle = '#2a1600'; g.lineWidth = 4;
+    [[44, 52], [84, 52]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 12, 0, 7); g.fill(); g.stroke(); eye(x, y + 2, 6); });
+    g.fillStyle = '#5a1a00'; g.beginPath(); g.ellipse(64, 92, 11, 15, 0, 0, 7); g.fill();
+  } else if (id === 'fuego') {
+    const fl = (s, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(64, 10 + (1 - s) * 40); g.bezierCurveTo(100 * s + 20, 50, 100 * s + 14, 120, 64, 120); g.bezierCurveTo(14 - 100 * s + 100, 120, 14 + (1 - s) * 30, 60, 40 + (1 - s) * 10, 34 + (1 - s) * 30); g.quadraticCurveTo(50, 60, 64, 10 + (1 - s) * 40); g.fill(); };
+    fl(1, '#ff4a1a'); fl(0.72, '#ff9a1a'); fl(0.45, '#ffe46a');
+  } else if (id === 'corazon') {
+    g.fillStyle = '#ff2a55'; g.strokeStyle = '#7a0020'; g.lineWidth = 6;
+    g.beginPath(); g.moveTo(64, 112); g.bezierCurveTo(8, 72, 14, 18, 64, 40); g.bezierCurveTo(114, 18, 120, 72, 64, 112); g.fill(); g.stroke();
+    g.fillStyle = '#ffffff99'; g.beginPath(); g.ellipse(42, 46, 10, 6, -0.6, 0, 7); g.fill();
+  } else if (id === 'pulgar') {
+    g.fillStyle = '#39a900'; g.beginPath(); g.arc(64, 64, 58, 0, 7); g.fill();
+    g.fillStyle = '#ffd9a0'; g.strokeStyle = '#3a2400'; g.lineWidth = 5;
+    g.beginPath(); g.roundRect ? g.roundRect(36, 58, 50, 44, 10) : g.rect(36, 58, 50, 44); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(52, 60); g.lineTo(58, 26); g.quadraticCurveTo(70, 22, 70, 36); g.lineTo(68, 58); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#1f6a00'; g.fillRect(86, 58, 14, 44);
+  }
+  return (faceCache[id] = c);
+}
+window.SENA_FACE = id => FACE_IDS.includes(id) ? drawFace(id).toDataURL() : '';
+window.SENA_FACES = FACE_IDS;
+
+// ================= Globos de chat sobre los jugadores =================
+const chatBubbles = [];
+function bubbleSprite(kind, val) {
+  let c;
+  if (kind === 'f') c = drawFace(val);
+  else {
+    c = document.createElement('canvas'); const g = c.getContext('2d'); g.font = 'bold 34px "Trebuchet MS", sans-serif';
+    const w = Math.min(600, Math.ceil(g.measureText(val).width) + 44); c.width = w; c.height = 78;
+    g.font = 'bold 34px "Trebuchet MS", sans-serif';
+    g.fillStyle = '#ffffff'; g.strokeStyle = '#08130a'; g.lineWidth = 5;
+    g.beginPath(); g.moveTo(16, 4); g.lineTo(w - 16, 4); g.quadraticCurveTo(w - 4, 4, w - 4, 18); g.lineTo(w - 4, 50); g.quadraticCurveTo(w - 4, 62, w - 16, 62);
+    g.lineTo(w / 2 + 10, 62); g.lineTo(w / 2, 75); g.lineTo(w / 2 - 10, 62); g.lineTo(16, 62); g.quadraticCurveTo(4, 62, 4, 50); g.lineTo(4, 18); g.quadraticCurveTo(4, 4, 16, 4); g.fill(); g.stroke();
+    g.fillStyle = '#08130a'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(val, w / 2, 34, w - 30);
+  }
+  const sp = new T.Sprite(new T.SpriteMaterial({ map: new T.CanvasTexture(c), transparent: true, depthTest: false }));
+  sp.renderOrder = 30;
+  if (kind === 'f') sp.scale.set(1.15, 1.15, 1); else sp.scale.set(c.width / 78 * 0.62, 0.62, 1);
+  return sp;
+}
+function showBubble(uid, kind, val) {
+  const isMe = game.mp && uid === game.mp.me;
+  if (!isMe && !remotes.has(uid)) return;
+  chatBubbles.filter(b => b.uid === uid).forEach(b => { b.life = Math.min(b.life, 0.25); });
+  const obj = bubbleSprite(kind, val); scene.add(obj);
+  chatBubbles.push({ uid, obj, life: kind === 'f' ? 2.6 : 3.6, t: 0, face: kind === 'f' });
+  if (kind === 'f') SFX.bump();
+}
+function updateBubbles(dt) {
+  for (let i = chatBubbles.length - 1; i >= 0; i--) {
+    const b = chatBubbles[i]; b.life -= dt; b.t += dt;
+    let x, y, h;
+    if (game.mp && b.uid === game.mp.me) { x = player.x; y = player.y; h = player.h; }
+    else { const r = remotes.get(b.uid); if (!r || !r.model || !r.model.visible) { b.obj.visible = false; if (b.life <= 0) { scene.remove(b.obj); chatBubbles.splice(i, 1); } continue; } x = r.x; y = r.y + (r.ghost ? 0.4 : 0); h = 1.5 * r.sc; }
+    b.obj.visible = true;
+    const pop = Math.min(1, b.t / 0.18), bob = b.face ? Math.sin(b.t * 7) * 0.08 : 0;
+    b.obj.position.set(x, y + h + 1.05 + bob, 1.2);
+    b.obj.material.opacity = Math.min(1, b.life / 0.3);
+    if (b.face) { const s = 1.15 * (0.6 + 0.4 * pop) * (1 + Math.sin(b.t * 12) * 0.04); b.obj.scale.set(s, s, 1); }
+    if (b.life <= 0) { scene.remove(b.obj); chatBubbles.splice(i, 1); }
+  }
+}
+
+// ================= Revivir al compañero (modo en equipo) =================
+const ghostMsg = document.getElementById('ghostMsg'), raceHud = document.getElementById('raceHud'), raceTimer = document.getElementById('raceTimer');
+function setModelOpacity(m, a) {
+  m.traverse(o => {
+    if (!o.isMesh) return;
+    if (!o.userData.ownMat) { o.material = o.material.clone(); o.userData.ownMat = true; }
+    o.material.transparent = a < 1; o.material.opacity = a; o.material.depthWrite = a >= 1;
+  });
+}
+function teammates() { const now = performance.now(); return [...remotes.values()].filter(r => r.has && now - r.last < 6000); }
+function canBeRevived() { return !!game.mp && game.mp.mode === 'coop' && teammates().length > 0; }
+function becomeGhost() {
+  const p = player;
+  p.dead = false; p.ghost = true; p.ghostT = 20; p.vx = p.vy = 0; p.pound = false;
+  if (p.safeX != null) { p.x = p.safeX; p.y = p.safeY; }
+  if (model) setModelOpacity(model, 0.38);
+  play('M_Fall', { fade: 0.2, speed: 0.4 });
+  ghostMsg.hidden = false; toast('Caíste. Tus compañeros pueden revivirte', 2000);
+}
+function endGhost() {
+  player.ghost = false; ghostMsg.hidden = true;
+  if (model) setModelOpacity(model, 1);
+}
+function reviveSelf(byName, quiet) {
+  const p = player; endGhost();
+  p.invT = 2.2; p.vy = 9; p.grounded = false; p.dead = false;
+  burstColor(p.x, p.y + 0.8, 0x9af0ff, 40, 7); ringFx(p.x, p.y + 0.8, 0x9af0ff, { to: 3 });
+  if (!quiet) { SFX.powerup(); toast(byName ? byName + ' te revivió' : 'Volviste al juego', 1600); }
+  play('M_Jump', { loop: false, fade: 0.05 });
+}
+let teamDownT = 0;
+function updateGhost(dt) {
+  const p = player;
+  p.ghostT -= dt;
+  ghostMsg.textContent = 'Esperando a que te revivan... ' + Math.max(0, Math.ceil(p.ghostT));
+  // si todo el equipo cayó, vuelven juntos al último checkpoint
+  const mates = teammates();
+  teamDownT = mates.length && mates.every(r => r.ghost || r.dead) ? teamDownT + dt : 0;
+  if (teamDownT > 1.2) { teamDownT = 0; toast('Equipo caído. Vuelven al checkpoint', 2200); endGhost(); resetPlayer(game.checkpoint); p.invT = 2; return; }
+  if (p.ghostT <= 0 || !mates.length) { endGhost(); resetPlayer(game.checkpoint); p.invT = 2; return; }
+}
+let reviveCd = 0;
+function checkRevives(dt) {   // tocar a un compañero fantasma lo revive
+  reviveCd -= dt;
+  const p = player;
+  if (reviveCd > 0 || p.dead || p.ghost || game.state !== 'play') return;
+  for (const r of teammates()) {
+    if (r.ghost && Math.abs(r.x - p.x) < 1.1 && Math.abs(r.y + 0.4 - (p.y + p.h / 2)) < 1.6) {
+      net('revive', { u: r.uid }); reviveCd = 1.2;
+      burstColor(r.x, r.y + 1, 0x9af0ff, 30, 6); SFX.powerup(); toast('Reviviste a ' + r.name, 1500); addScore(500);
+      break;
+    }
+  }
+}
+
+// ================= Modo carrera =================
+const raceElapsed = () => game.mp ? Math.round((performance.now() - game.mp.t0) / 100) / 10 : 0;
+function raceFinished(uid, name, t) {
+  const m = game.mp; if (!m || m.order.some(o => o.uid === uid)) return;
+  m.order.push({ uid, name, t: t || raceElapsed() });
+  const place = m.order.length;
+  if (uid !== m.me) toast(name + ' llegó en el puesto ' + place, 2000);
+  if (place === 1 && !m.finished) { m.raceLeft = 30; raceTimer.hidden = false; }
+}
+function myPlace() { const i = game.mp.order.findIndex(o => o.uid === game.mp.me); return i < 0 ? 0 : i + 1; }
+function mpStats() {
+  const s = { coins: game.coins, kills: game.runKills || 0, score: game.score };
+  if (game.mp && game.mp.mode === 'race') { s.place = myPlace(); const o = game.mp.order.find(q => q.uid === game.mp.me); s.time = o ? o.t : 0; }
+  return s;
+}
+let stompCd = 0, pushT = 0;
+function raceContacts(dt) {
+  const p = player; stompCd -= dt;
+  if (p.dead || p.ghost || game.state !== 'play') return;
+  for (const r of teammates()) {
+    if (r.ghost || r.dead || r.fin) continue;
+    const dx = p.x - r.x, top = r.y + 1.3 * r.sc;
+    // pisotón: caer encima de otro jugador lo aturde y le roba monedas
+    if (stompCd <= 0 && p.vy < 0 && Math.abs(dx) < 0.6 && p.y > top - 0.45 && p.y < top + 0.3) {
+      net('stomp', { u: r.uid }); stompCd = 0.8; p.vy = 15; SFX.stomp(); shake = 0.2;
+      burstColor(r.x, top, 0xffd23f, 16, 4); play('M_Jump', { loop: false, fade: 0.05 });
+      continue;
+    }
+    // empujón: si chocan de lado se separan
+    if (Math.abs(dx) < 0.55 && Math.abs(p.y - r.y) < 0.9) moveX(p, (Math.sign(dx) || 1) * 3.2 * dt);
+  }
+}
+function gotStomped(uid, name) {
+  const p = player;
+  if (p.dead || p.ghost || p.invT > 0 || p.shieldT > 0) return;
+  p.stunT = 1.2; p.invT = 1.6; shake = 0.3; SFX.stomp();
+  const n = Math.min(3, game.coins); game.coins -= n;
+  if (n > 0) net('loot', { u: uid, n });
+  toast(name + ' te pisó' + (n ? ' y te robó ' + n + ' monedas' : ''), 1700);
+  for (let i = 0; i < 3; i++) {   // estrellitas de aturdido
+    const st2 = new T.Mesh(new T.OctahedronGeometry(0.11), new T.MeshBasicMaterial({ color: 0xffe46a }));
+    addFx(st2, 1.2, (o, k) => { const a = k * 14 + i * 2.1; o.position.set(player.x + Math.cos(a) * 0.45, player.y + player.h + 0.25, Math.sin(a) * 0.45 + 0.3); o.rotation.y += 0.3; });
+  }
+}
+let hudT = 0;
+function updateRaceHud(dt) {
+  const m = game.mp;
+  if (m.raceLeft > 0 && !m.finished) {
+    m.raceLeft -= dt; raceTimer.textContent = 'La carrera termina en ' + Math.max(0, Math.ceil(m.raceLeft)) + ' s';
+    if (m.raceLeft <= 0) { raceTimer.hidden = true; toast('Se acabó el tiempo', 1800); if (!m.sent) { m.sent = true; if (window.SenaMP) SenaMP.levelDone(mpStats()); } }
+  }
+  if (m.finished) raceTimer.hidden = true;
+  if ((hudT -= dt) > 0) return; hudT = 0.25;
+  const rows = [{ uid: m.me, name: 'Tú', x: player.x, me: true }, ...teammates().map(r => ({ uid: r.uid, name: r.name, x: r.x }))];
+  const placeOf = uid => { const i = m.order.findIndex(o => o.uid === uid); return i < 0 ? 99 : i; };
+  rows.sort((a, b) => placeOf(a.uid) - placeOf(b.uid) || b.x - a.x);
+  raceHud.hidden = false;
+  raceHud.replaceChildren(...rows.map((r, i) => {
+    const d = document.createElement('div'); d.className = 'rrow' + (r.me ? ' me' : '') + (placeOf(r.uid) < 99 ? ' done' : '');
+    const pct = Math.max(0, Math.min(100, Math.round(r.x / Math.max(1, FLAGX) * 100)));
+    const a = document.createElement('b'); a.textContent = (i + 1) + '.';
+    const n = document.createElement('span'); n.textContent = r.name;
+    const bar = document.createElement('i'); bar.style.setProperty('--w', (placeOf(r.uid) < 99 ? 100 : pct) + '%');
+    d.append(a, n, bar); return d;
+  }));
+}
+function updateMpFx(dt) {
+  updateBubbles(dt);
+  if (!game.mp || !(game.state === 'play' || game.state === 'win')) return;
+  if (game.mp.mode === 'coop') checkRevives(dt);
+  else { raceContacts(dt); updateRaceHud(dt); }
+}
 
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
@@ -1166,6 +1415,7 @@ function die() {
 }
 // recibir daño: si es grande se encoge, si es pequeño muere
 function damage() {
+  if (player.ghost) return;
   if (player.shieldT > 0 || player.dashT > 0) return;   // Estructura Estable / dash: invulnerable
   game.hurt = true;
   if (player.big) { player.big = false; player.growT = 0.8; player.invT = 2.0; SFX.shrink(); }
@@ -1177,6 +1427,7 @@ function grow() {
   player.big = true; player.growT = 0.8; SFX.powerup(); toast('¡GRANDE!', 900);
 }
 function afterDeath() {
+  if (game.mp) { resetPlayer(game.checkpoint); player.invT = 2; return; }
   if (game.lives <= 0) recordBest();
   if (game.lives > 0) { game.time = levelSpec(game.level).time; resetPlayer(game.checkpoint); }
   else {
@@ -1185,7 +1436,8 @@ function afterDeath() {
   }
 }
 function startWin(fromNet) {
-  if (!fromNet) net('finish', {});
+  if (!fromNet && game.mp && game.mp.mode === 'race') { if (game.mp.finished) return; game.mp.finished = true; raceFinished(game.mp.me, 'Tú', raceElapsed()); }
+  if (!fromNet) net('finish', { t: game.mp ? raceElapsed() : 0 });
   game.state = 'win'; game.winT = 0; player.vx = 0; player.vy = 0; player.pound = false;
   player.x = FLAGX + 0.5 - 0.35; player.facing = 1;
   const bonus = Math.floor(player.y - 2) * 400 + 1000; addScore(bonus); toast('+' + bonus, 1200);
@@ -1577,7 +1829,8 @@ addEventListener('keydown', e => {
   }
   if (e.code === 'Enter' && inMenu()) startWithTransition();
   if (game.state === 'glory' && (e.code === 'Enter' || e.code === 'Space')) gloryContinue();
-  if (e.code === 'KeyR' && game.state === 'play' && !charLoading) startGame();
+  if (game.mp && game.state === 'play' && (e.code === 'KeyT' || e.code === 'Enter')) { e.preventDefault(); if (window.SenaMP) SenaMP.openChat(); return; }
+  if (e.code === 'KeyR' && game.state === 'play' && !charLoading && !game.mp) startGame();
   if (game.state === 'map') {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') mapMove(-1, 0);
     if (e.code === 'ArrowRight' || e.code === 'KeyD') mapMove(1, 0);
@@ -1596,12 +1849,15 @@ function approach(v, t, d) { return v < t ? Math.min(v + d, t) : Math.max(v - d,
 
 function updatePlayer(dt) {
   const p = player;
+  if (p.ghost) { updateGhost(dt); return; }
   if (p.dead) {
     p.deadT += dt;
+    if (canBeRevived()) { if (p.deadT > 1.3) becomeGhost(); return; }   // cooperativo: queda como fantasma
     if (p.deadT > 0.55) { if (!p.launched) { p.vy = 14; p.launched = true; } p.vy -= GRAV * dt; p.y += p.vy * dt; }
     if (p.deadT > 3.2) { p.launched = false; afterDeath(); }
     return;
   }
+  if (p.stunT > 0) p.stunT -= dt;
   if (game.state === 'win') {
     game.winT += dt;
     if (p.y > 3) { p.y = Math.max(3, p.y - 7 * dt); flag.userData.cloth.position.y = Math.max(3.8, flag.userData.cloth.position.y - 7 * dt); }
@@ -1626,7 +1882,7 @@ function updatePlayer(dt) {
     if (p.poundT < 0.4) { p.vx = 0; p.vy = 0; } else p.vy = -26;
   } else {
     p.crouch = p.grounded && down;
-    let dir = (right ? 1 : 0) - (left ? 1 : 0);
+    let dir = p.stunT > 0 ? 0 : (right ? 1 : 0) - (left ? 1 : 0);
     if (p.crouch || (p.punchT > 0 && p.grounded)) dir = 0;
     const max = (run ? RUN : WALK) * (p.slowT > 0 ? 1.35 : 1);
     if (dir) {
@@ -1648,7 +1904,7 @@ function updatePlayer(dt) {
       if (p.y + p.h > WATER_TOP - 0.1 && p.vy > 0) { p.vy = 0; p.y = WATER_TOP - 0.1 - p.h; }
       bubbleT -= dt; if (bubbleT <= 0) { bubbleT = 0.5 + Math.random() * 0.6; spawnBubbles(p, 1); }
     } else {
-    if (pressed.jump) p.jumpBuf = 0.13;
+    if (pressed.jump && !(p.stunT > 0)) p.jumpBuf = 0.13;
     p.jumpBuf -= dt; p.coyote = p.grounded ? 0.1 : p.coyote - dt;
     if (p.jumpBuf > 0 && p.coyote > 0 && !p.crouch) {
       p.vy = JUMP + Math.abs(p.vx) * 0.22; p.grounded = false; p.coyote = 0; p.jumpBuf = 0;
@@ -1693,7 +1949,7 @@ function updatePlayer(dt) {
     if (p.pound) { p.pound = false; poundLand(); }
     else if (fallV < -10) p.landT = 0.14;
   }
-  if (p.grounded) { p.airDash = true; p.airJumps = 1; }
+  if (p.grounded) { p.airDash = true; p.airJumps = 1; if (!p.onPlat && r && r.ground) { p.safeX = p.x; p.safeY = p.y; } }
   p.landT -= dt; p.invT -= dt;
   const cpx = levelSpec(game.level).checkpoint;
   if (p.x > cpx && game.checkpoint < cpx) { game.checkpoint = cpx; toast('CHECKPOINT', 1000); }
@@ -1761,7 +2017,7 @@ function updateEnemies(dt) {
     }
     if (e.y < -3) { e.alive = false; e.mode = 'fall'; }
     // tocar al jugador
-    if (!p.dead && game.state === 'play' && Math.abs(e.x - p.x) < e.hw + p.hw && p.y < e.y + e.h && p.y + p.h > e.y) {
+    if (!p.dead && !p.ghost && game.state === 'play' && Math.abs(e.x - p.x) < e.hw + p.hw && p.y < e.y + e.h && p.y + p.h > e.y) {
       if (p.shieldT > 0 || p.dashT > 0) { if (hurtEnemy(e)) burstColor(e.x, e.y + e.h / 2, new T.Color(curPower().color), 20, 6); }
       else if (p.pound || (p.vy < 0 && p.y > e.y + e.h * 0.35)) {
         killEnemy(e, 'stomp');
@@ -1863,7 +2119,7 @@ function update(dt) {
   }
   const tnow = performance.now() / 1000;
   coins.forEach(c => { if (!c.taken) { c.m.rotation.y = tnow * 2.2 + c.ph; c.m.position.y = c.y + Math.sin(tnow * 3 + c.ph) * 0.08; } });
-  updateRemotes(dt);
+  updateRemotes(dt); updateMpFx(dt);
   updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateSparks(dt); updatePfx(dt); updatePowerUI();
   if (MAT.lava.map) { MAT.lava.map.offset.x = tnow * 0.05; MAT.lava.map.offset.y = Math.sin(tnow * 0.7) * 0.04; MAT.lava.emissiveIntensity = 0.8 + Math.sin(tnow * 3) * 0.15; }
   if (flag) flag.userData.cloth.rotation.y = Math.sin(tnow * 3) * 0.15;
@@ -2311,7 +2567,7 @@ Promise.all(enemyEntries.map(([name, b64]) =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, get enemies() { return enemies; }, get player() { return player; },
+  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; },
     remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor

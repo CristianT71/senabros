@@ -9,7 +9,7 @@ const btn = $('mpBtn');
 if (!window.SenaOnline || !window.SENA_MP || !btn) { if (btn) btn.style.display = 'none'; return; }
 
 const MAX = 4, RATE = 100, ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const st = { ch: null, code: '', joinedAt: 0, creating: false, players: [], inLevel: false, timer: 0, results: null, inbox: null, inboxUid: null, starting: false };
+const st = { mode: 'coop', chatLog: [], lastChat: 0, ch: null, code: '', joinedAt: 0, creating: false, players: [], inLevel: false, timer: 0, results: null, inbox: null, inboxUid: null, starting: false };
 const db = () => SenaOnline.db;
 const me = () => SenaOnline.user;
 const el = (tag, props = {}, ...kids) => {
@@ -56,6 +56,10 @@ function renderRoom() {
   }
   $('mpSlots').replaceChildren(...slots);
   $('mpHostBox').hidden = !host; $('mpWaitBox').hidden = host;
+  const hostMode = (st.players[0] && st.players[0].mode) || 'coop';
+  if (!host) st.mode = hostMode;
+  $('mpModeCoop').classList.toggle('on', st.mode === 'coop'); $('mpModeRace').classList.toggle('on', st.mode === 'race');
+  $('mpModeLbl').hidden = host; $('mpModeLbl').textContent = 'Modo: ' + (hostMode === 'race' ? 'Carrera (el primero en llegar gana)' : 'En equipo (revive a tus compañeros)');
   const playing = st.players.some(p => p.st === 'play');
   $('mpWaitTxt').textContent = playing ? 'La sala está jugando un nivel. Espera a que terminen.' : 'Esperando a que el anfitrión empiece...';
   $('mpStart').disabled = st.starting || playing;
@@ -79,8 +83,16 @@ function renderFriends() {
 function renderResults() {
   const box = $('mpResults'), r = st.results;
   if (!r || !r.rows.size) { box.hidden = true; return; }
-  const rows = [...r.rows.values()].sort((a, b) => b.score - a.score);
   box.hidden = false;
+  if (r.race) {
+    const rows = [...r.rows.values()].sort((a, b) => (a.place || 99) - (b.place || 99) || b.score - a.score);
+    box.replaceChildren(el('div', { class: 'ptitle' }, 'Resultados ' + r.label),
+      el('div', { class: 'rtable' }, el('div', { class: 'rh' }, el('span', {}, 'Puesto'), el('span', {}, 'Jugador'), el('span', {}, 'Tiempo'), el('span', {}, 'Monedas')),
+        ...rows.map(x => el('div', { class: 'rr' + (x.place && x.place <= 3 ? ' p' + x.place : '') },
+          el('span', {}, x.place ? x.place + '.' : 'No llegó'), el('span', {}, x.n), el('span', {}, x.time ? x.time.toFixed(1) + ' s' : '-'), el('span', {}, String(x.coins))))));
+    return;
+  }
+  const rows = [...r.rows.values()].sort((a, b) => b.score - a.score);
   box.replaceChildren(el('div', { class: 'ptitle' }, 'Resultados ' + r.label),
     el('div', { class: 'rtable' }, el('div', { class: 'rh' }, el('span', {}, 'Jugador'), el('span', {}, 'Puntos'), el('span', {}, 'Monedas'), el('span', {}, 'Bugs')),
       ...rows.map((x, i) => el('div', { class: 'rr' + (i === 0 ? ' first' : '') }, el('span', {}, x.n), el('span', {}, x.score.toLocaleString('es')), el('span', {}, String(x.coins)), el('span', {}, String(x.kills))))));
@@ -93,7 +105,7 @@ function subscribe(ch) {
     ch.subscribe(s => { if (s === 'SUBSCRIBED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' || s === 'CLOSED') { clearTimeout(t); res(s); } });
   });
 }
-async function track(state) { if (st.ch && me()) await st.ch.track({ name: me().username, char: SENA_MP.char(), joined: st.joinedAt, st: state }); }
+async function track(state) { if (st.ch && me()) await st.ch.track({ name: me().username, char: SENA_MP.char(), joined: st.joinedAt, st: state, mode: st.mode }); }
 function onSync() {
   if (!st.ch) return;
   const ps = st.ch.presenceState();
@@ -110,7 +122,7 @@ async function joinRoom(code, creating) {
   if (code.length < 4) return setMsg('Escribe el código de la sala');
   await leaveRoom();
   setMsg('Conectando...', true);
-  st.code = code; st.joinedAt = Date.now(); st.creating = creating; st.results = null;
+  st.code = code; st.joinedAt = Date.now(); st.creating = creating; st.results = null; st.chatLog = []; renderChatLog();
   try { await db().realtime.setAuth(); } catch (_) {}
   let ch, status;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -121,6 +133,7 @@ async function joinRoom(code, creating) {
     ch.on('broadcast', { event: 'ev' }, ({ payload }) => { if (st.inLevel && payload) SENA_MP.event(payload.u, payload.n, payload.type, payload.p); });
     ch.on('broadcast', { event: 'start' }, ({ payload }) => { if (!st.inLevel) beginCountdown(payload); });
     ch.on('broadcast', { event: 'done' }, ({ payload }) => addResult(payload));
+    ch.on('broadcast', { event: 'chat' }, ({ payload }) => receiveChat(payload));
     status = await subscribe(ch);
     if (status === 'SUBSCRIBED') break;
     await db().removeChannel(ch);
@@ -148,7 +161,7 @@ async function startGame() {
   if (!isHost() || st.starting) return;
   const [world, level] = $('mpLevel').value.split('-').map(Number);
   if (!world) return;
-  const payload = { world, level, players: st.players.map(p => ({ uid: p.uid, name: p.name, char: p.char })) };
+  const payload = { mode: st.mode, world, level, players: st.players.map(p => ({ uid: p.uid, name: p.name, char: p.char })) };
   st.starting = true; renderRoom();
   await st.ch.send({ type: 'broadcast', event: 'start', payload });
   beginCountdown(payload);
@@ -157,9 +170,9 @@ function beginCountdown(p) {
   if (st.inLevel) return;
   st.starting = true;
   const name = (SENA_MP.levels().find(l => l.world === p.world && l.level === p.level) || {}).name || '';
-  st.results = { label: `${p.world}-${p.level} ${name}`, rows: new Map() };
+  st.results = { label: `${p.mode === 'race' ? 'Carrera' : 'En equipo'} ${p.world}-${p.level} ${name}`, race: p.mode === 'race', rows: new Map() };
   closeScreen(); document.querySelectorAll('.screen.show').forEach(s => s.classList.remove('show'));
-  const box = $('mpCount'); $('mpCountTxt').textContent = `${p.world}-${p.level}  ${name}`; box.hidden = false;
+  const box = $('mpCount'); $('mpCountTxt').textContent = `${p.mode === 'race' ? 'CARRERA' : 'EN EQUIPO'}  -  ${p.world}-${p.level}  ${name}`; box.hidden = false;
   let n = 3; $('mpCountN').textContent = n;
   const t = setInterval(() => {
     n--; if (n > 0) { $('mpCountN').textContent = n; return; }
@@ -171,7 +184,8 @@ function enterLevel(p) {
   if (!st.ch) return;
   st.inLevel = true;
   window.SENA_NET = { send: (type, payload) => { if (st.ch) st.ch.send({ type: 'broadcast', event: 'ev', payload: { u: me().id, n: me().username, type, p: payload } }); } };
-  SENA_MP.start({ world: p.world, level: p.level, me: me().id, players: st.players.filter(q => q.uid !== me().id).map(q => ({ uid: q.uid, name: q.name, char: q.char })) });
+  st.chatLog = st.chatLog.slice(-3); renderChatLog();
+  SENA_MP.start({ mode: p.mode, world: p.world, level: p.level, me: me().id, players: st.players.filter(q => q.uid !== me().id).map(q => ({ uid: q.uid, name: q.name, char: q.char })) });
   track('play');
   clearInterval(st.timer);
   st.timer = setInterval(() => {
@@ -180,14 +194,14 @@ function enterLevel(p) {
   }, RATE);
 }
 async function leaveLevel(showLobby = true) {
-  clearInterval(st.timer); st.inLevel = false; window.SENA_NET = null;
+  clearInterval(st.timer); st.inLevel = false; window.SENA_NET = null; $('chatPanel').hidden = true;
   api.leaving = true; SENA_MP.backToMenu(); api.leaving = false;
   await track('lobby');
   if (showLobby) openScreen();
 }
 function addResult(r) {
   if (!r || !st.results) return;
-  st.results.rows.set(r.u, { n: r.n, coins: r.coins | 0, kills: r.kills | 0, score: r.score | 0 });
+  st.results.rows.set(r.u, { n: r.n, coins: r.coins | 0, kills: r.kills | 0, score: r.score | 0, place: r.place | 0, time: +r.time || 0 });
   if ($('mpScreen').classList.contains('show')) renderResults();
 }
 function levelDone(stats) {
@@ -196,6 +210,64 @@ function levelDone(stats) {
   addResult(r);
   setTimeout(() => leaveLevel(true), 1500);
 }
+
+// ---------- chat ----------
+const QUICK = ['¡Ayuda!', '¡Por aquí!', '¡Espérenme!', '¡Vamos!', '¡Cuidado!', '¡Gracias!', 'Jajaja', 'GG', '¡Les gané!', 'Revívanme'];
+const FACE_NAME = { risa: 'risa', lloron: 'llorón', burla: 'burla', enojado: 'enojado', sorpresa: 'sorpresa', fuego: 'fuego', corazon: 'corazón', pulgar: 'bien' };
+const BAD = /\b(hp|hpta|hijueputa|gonorrea|malpari\w*|marica|puta|puto|mierda|verga|culo|pendej\w*|imbecil|imbécil|idiota|estupid\w*|estúpid\w*)\b/gi;
+const clean = t => t.replace(/[\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60).replace(BAD, m => '*'.repeat(m.length));
+function faceImg(id) { const i = el('img', { alt: FACE_NAME[id] || '' }); i.src = SENA_FACE(id); return i; }
+function chatLine(m) {
+  const d = el('div', { class: 'cl' }, el('b', {}, m.n + ':'));
+  if (m.k === 'f') d.append(faceImg(m.v)); else d.append(document.createTextNode(m.v));
+  return d;
+}
+function renderChatLog() {
+  const box = $('lobbyChat');
+  if (box) { box.replaceChildren(...(st.chatLog.length ? st.chatLog.map(chatLine) : [el('div', { class: 'empty' }, 'Saluda a tus compañeros de sala')])); box.scrollTop = box.scrollHeight; }
+}
+function pushLevelLog(m) {
+  const log = $('chatLog'), d = chatLine(m); log.append(d);
+  while (log.children.length > 5) log.firstChild.remove();
+  setTimeout(() => d.classList.add('old'), 8000); setTimeout(() => d.remove(), 8800);
+}
+function addChat(m) {
+  st.chatLog.push(m); if (st.chatLog.length > 40) st.chatLog.shift();
+  renderChatLog();
+  if (st.inLevel) { pushLevelLog(m); SENA_MP.chat(m.u, m.k, m.v); }
+}
+function receiveChat(m) {
+  if (!m || (m.k !== 't' && m.k !== 'f')) return;
+  if (m.k === 'f' && !SENA_FACES.includes(m.v)) return;
+  if (m.k === 't') { m.v = clean(String(m.v || '')); if (!m.v) return; }
+  m.n = String(m.n || '?').slice(0, 16);
+  addChat(m);
+}
+function sendChat(k, v) {
+  if (!st.ch || !me()) return;
+  const now = Date.now(); if (now - st.lastChat < 700) return; st.lastChat = now;
+  if (k === 't') { v = clean(v); if (!v) return; }
+  const m = { u: me().id, n: me().username, k, v };
+  st.ch.send({ type: 'broadcast', event: 'chat', payload: m });
+  addChat(m);
+}
+function buildChatButtons() {
+  const faces = id => el('button', { type: 'button', title: FACE_NAME[id], onclick: () => { sendChat('f', id); $('chatPanel').hidden = true; } }, faceImg(id));
+  $('cpFaces').replaceChildren(...SENA_FACES.map(faces));
+  $('lcFaces').replaceChildren(...SENA_FACES.map(id => el('button', { type: 'button', title: FACE_NAME[id], onclick: () => sendChat('f', id) }, faceImg(id))));
+  $('cpQuick').replaceChildren(...QUICK.map(q => el('button', { type: 'button', onclick: () => { sendChat('t', q); $('chatPanel').hidden = true; } }, q)));
+}
+function openChat() {
+  if (!st.inLevel) return;
+  const pnl = $('chatPanel'); pnl.hidden = !pnl.hidden;
+  if (!pnl.hidden && !document.body.classList.contains('touch')) setTimeout(() => $('cpInput').focus(), 30);
+}
+$('cpForm').addEventListener('submit', e => { e.preventDefault(); sendChat('t', $('cpInput').value); $('cpInput').value = ''; $('chatPanel').hidden = true; $('cpInput').blur(); });
+$('cpInput').addEventListener('keydown', e => { if (e.key === 'Escape') { $('chatPanel').hidden = true; $('cpInput').blur(); } });
+$('lcForm').addEventListener('submit', e => { e.preventDefault(); sendChat('t', $('lcInput').value); $('lcInput').value = ''; });
+$('chatBtn').onclick = openChat;
+$('mpModeCoop').onclick = () => { st.mode = 'coop'; track('lobby'); renderRoom(); };
+$('mpModeRace').onclick = () => { st.mode = 'race'; track('lobby'); renderRoom(); };
 
 // ---------- invitaciones ----------
 async function invite(f, b) {
@@ -238,6 +310,7 @@ $('mpCopy').onclick = () => { navigator.clipboard?.writeText(st.code); setMsg('C
 addEventListener('keydown', e => { if (e.code === 'Escape' && $('mpScreen').classList.contains('show')) closeScreen(); });
 addEventListener('beforeunload', () => { if (st.ch) st.ch.untrack(); });
 
-const api = window.SenaMP = { leaving: false, levelDone, leaveLevel: () => leaveLevel(true), get state() { return st; } };
+const api = window.SenaMP = { leaving: false, levelDone, openChat, leaveLevel: () => leaveLevel(true), get state() { return st; } };
+buildChatButtons(); renderChatLog();
 render();
 })();

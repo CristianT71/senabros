@@ -71,3 +71,10 @@ Agrega al final de la dirección:
 - Se sincronizan: bugs derrotados, bloques, monedas, golpes al jefe y la meta (si uno llega, gana todo el equipo). Sin vidas que perder.
 - Al terminar todos vuelven a la sala con la tabla de resultados.
 - Canales privados: solo jugadores con cuenta (políticas en `supabase/migrations/20261003000000_multijugador_realtime.sql`).
+
+### Modos y chat en línea
+- **En equipo:** si caes quedas como fantasma 20 s; un compañero te revive tocándote. Si cae todo el equipo, vuelven al checkpoint.
+- **Carrera:** cada uno juega su propio mundo; gana el primero en la bandera (luego hay 30 s para los demás). Ranking en vivo,
+  pisar a otro jugador lo aturde y le roba hasta 3 monedas, y chocar de lado empuja. Al final, podio en la sala.
+- **Chat:** tecla T (o el botón Chat) durante el nivel; también en la sala. Mensajes rápidos, texto libre (máx. 60, con filtro
+  de groserías) y 8 caritas dibujadas por el juego (risa, llorón, burla, enojado, sorpresa, fuego, corazón, bien).
