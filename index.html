@@ -114,9 +114,9 @@
         <aside class="room-side">
           <div id="mpHostBox">
             <div class="ptitle">Modo de juego</div>
-            <div class="modes"><button id="mpModeCoop" type="button" class="on"><b>En equipo</b><small>Juntos hasta la meta. Revive a tus compañeros.</small></button><button id="mpModeRace" type="button"><b>Carrera</b><small>El primero en llegar gana. Pisa a los demás.</small></button></div>
-            <div class="ptitle">Nivel</div>
-            <select id="mpLevel"></select>
+            <div class="modes"><button id="mpModeCoop" data-mode="coop" type="button" class="on"><b>En equipo</b><small>Juntos hasta la meta. Revive a tus compañeros.</small></button><button id="mpModeRace" data-mode="race" type="button"><b>Carrera</b><small>El primero en llegar gana. Pisa a los demás.</small></button><button id="mpModeBattle" data-mode="battle" type="button"><b>Batalla de monedas</b><small>2 minutos en la arena. Gana quien junte más.</small></button><button id="mpModeSurvival" data-mode="survival" type="button"><b>Supervivencia</b><small>Oleadas de bugs cada vez más duras. Aguanten juntos.</small></button></div>
+            <div id="mpLevelRow"><div class="ptitle">Nivel</div>
+            <select id="mpLevel"></select></div>
             <button id="mpStart" type="button" class="go">EMPEZAR</button>
           </div>
           <div id="mpWaitBox" class="mp-wait" hidden><div class="spin"></div><span id="mpWaitTxt">Esperando a que el anfitrión empiece...</span></div>

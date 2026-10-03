@@ -304,6 +304,7 @@ function genLevel(seed, diff, name, theme, opts = {}) {
 }
 let LEVELS = null;
 function levelSpec(i, w = game.world) {
+  if (i === -1 && game.arena) return game.arena;
   if (!LEVELS) LEVELS = [[
     lvl1(),
     genLevel(1207, 0.3, 'La Laguna', 'water', { bg: 'agua', water: true }),
@@ -752,6 +753,7 @@ function updateBoss(e, dt) {
 }
 function bossDefeated() {
   const L = levelSpec(game.level);
+  if (L.bossWall == null) { bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8; toast('¡BUG REY DERROTADO!', 2600); return; }
   bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8;
   toast('¡BUG REY DERROTADO!', 2600);
   for (let h = 0; h <= 8; h++) {
@@ -893,10 +895,14 @@ let toastTimer = 0;
 function toast(t, ms = 1500) { toastEl.textContent = t; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms); }
 
 let netMute = false;   // true mientras se aplica un evento de otro jugador (no da puntos ni misiones)
-const RACE_EVENTS = new Set(['finish', 'stomp', 'loot']);
+const MODE_EVENTS = {   // qué se comparte en cada modo (en equipo se comparte todo)
+  race: new Set(['finish', 'stomp', 'loot']),
+  battle: new Set(['cspawn', 'cgrab', 'stomp', 'loot']),
+  survival: new Set(['kill', 'boss', 'wave', 'revive']),
+};
 function net(type, payload) {
   if (!game.mp || netMute || !window.SENA_NET) return;
-  if (game.mp.mode === 'race' && !RACE_EVENTS.has(type)) return;   // en carrera no se comparten bugs, bloques ni monedas
+  if (MODE_EVENTS[game.mp.mode] && !MODE_EVENTS[game.mp.mode].has(type)) return;
   window.SENA_NET.send(type, payload);
 }
 function addScore(n) { if (netMute) return; game.score += n; }
@@ -918,8 +924,8 @@ function startLevel(i) {
   game.checkpoint = 3; game.time = L.time; game.state = 'play'; game.hurt = false;
   resetPlayer(3); setMenu(false); setMap(false);
   overlay.classList.remove('show');
-  worldLabel.textContent = (game.world + 1) + '-' + (i + 1);
-  toast((game.world + 1) + '-' + (i + 1) + '  ' + L.name.toUpperCase(), 1600);
+  worldLabel.textContent = i < 0 ? L.name : (game.world + 1) + '-' + (i + 1);
+  toast(i < 0 ? L.name.toUpperCase() : (game.world + 1) + '-' + (i + 1) + '  ' + L.name.toUpperCase(), 1600);
 }
 function startGame() { startLevel(game.level); }   // reiniciar el nivel actual (R)
 // transición de círculo verde: cubre la pantalla, ejecuta fn y se abre
@@ -1009,7 +1015,7 @@ function updateRemotes(dt) {
 }
 function applyRemoteState(uid, st) {
   const r = remotes.get(uid); if (!r) return;
-  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d; r.fin = !!st.fin;
+  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d; r.fin = !!st.fin; r.coins = st.c | 0; r.kills = st.kl | 0;
   if (!!st.g !== !!r.ghost) { r.ghost = !!st.g; if (r.model) setModelOpacity(r.model, r.ghost ? 0.38 : 1); if (r.helpTag) r.helpTag.visible = r.ghost; }
   r.last = performance.now();
   if (!r.has) { r.has = true; r.x = st.x; r.y = st.y; }
@@ -1037,6 +1043,12 @@ function applyRemoteEvent(uid, name, type, p) {
     } else if (type === 'finish') {
       if (game.mp.mode === 'race') raceFinished(uid, name, p.t);
       else if (game.state === 'play' && !player.dead) { toast(name + ' llegó a la meta', 2200); netMute = false; if (player.ghost) reviveSelf(null, true); startWin(true); }
+    } else if (type === 'cspawn') {
+      battleSpawnCoin(p.i, p.x, p.y, p.v);
+    } else if (type === 'cgrab') {
+      battleRemoveCoin(p.i);
+    } else if (type === 'wave') {
+      survivalStartWave(p.n, p.list);
     } else if (type === 'revive') {
       if (p.u === game.mp.me && player.ghost) reviveSelf(name);
     } else if (type === 'stomp') {
@@ -1050,24 +1062,31 @@ function localNetState() {
   if (!game.mp || !model || !(game.state === 'play' || game.state === 'win' || game.state === 'won')) return null;
   const r2 = v => Math.round(v * 100) / 100;
   return { x: r2(player.x), y: r2(player.y), vx: r2(player.vx), vy: r2(player.vy), f: player.facing, a: curName, s: r2(cur ? cur.timeScale : 1),
-    d: player.dead ? 1 : 0, g: player.ghost ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x), fin: game.mp.finished ? 1 : 0 };
+    d: player.dead ? 1 : 0, g: player.ghost ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x), fin: game.mp.finished ? 1 : 0, c: game.coins | 0, kl: game.runKills | 0 };
 }
 function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}], me }
   stopMP();
-  game.mp = { me: opts.me, mode: opts.mode === 'race' ? 'race' : 'coop', order: [], finished: false, sent: false, t0: performance.now(), raceLeft: 0, names: {} };
+  const mode = ['race', 'battle', 'survival'].includes(opts.mode) ? opts.mode : 'coop';
+  game.mp = { me: opts.me, mode, order: [], finished: false, sent: false, t0: performance.now(), raceLeft: 0, names: {},
+    ids: (opts.order || []).slice(), battleLeft: 120, wave: 0, waveBreak: 2.5, coinT: 1, bcoins: new Map(), nextCoin: 0, over: false };
   opts.players.forEach(q => { game.mp.names[q.uid] = q.name; });
   opts.players.filter(q => q.uid !== opts.me).forEach(q => ensureRemote(q.uid, q.name, q.char));
   Object.assign(game, { score: 0, coins: 0, lives: 3, energy: 0, challenge: null });
   game.world = opts.world - 1; MAPN = WORLDS[game.world].nodes;
-  startLevel(opts.level - 1);
-  worldLabel.textContent = game.mp.mode === 'race' ? 'CARRERA' : 'EN EQUIPO';
-  document.body.classList.add('mplevel'); document.body.classList.toggle('race', game.mp.mode === 'race');
+  if (mode === 'battle' || mode === 'survival') { game.arena = arenaSpec(mode); startLevel(-1); }
+  else { game.arena = null; startLevel(opts.level - 1); }
+  // cada jugador sale en un punto distinto (antes salían todos encima y se quedaban pegados)
+  const idx = Math.max(0, game.mp.ids.indexOf(opts.me)), n = Math.max(1, game.mp.ids.length);
+  const sx = game.arena ? 6 + idx * ((game.arena.W - 12) / Math.max(1, n - 1 || 1)) : 3 + idx * 1.1;
+  player.x = player.safeX = sx; game.checkpoint = sx;
+  worldLabel.textContent = { race: 'CARRERA', battle: 'BATALLA', survival: 'SUPERVIVENCIA' }[mode] || 'EN EQUIPO';
+  document.body.classList.add('mplevel'); document.body.classList.toggle('race', mode !== 'coop');
 }
 function stopMP() {
   [...remotes.keys()].forEach(removeRemote);
   if (player.ghost) endGhost();
   chatBubbles.splice(0).forEach(b => scene.remove(b.obj));
-  document.body.classList.remove('mplevel', 'race'); ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
+  document.body.classList.remove('mplevel', 'race'); game.arena = null; if (game.level < 0) { game.level = 0; buildLevel(); } ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
   game.mp = null;
 }
 window.SENA_MP = {
@@ -1089,7 +1108,7 @@ window.SENA_MP = {
 
 
 // ================= Caritas de reacción (dibujadas; el juego no usa emojis del sistema) =================
-const FACE_IDS = ['risa', 'lloron', 'burla', 'enojado', 'sorpresa', 'fuego', 'corazon', 'pulgar'];
+const FACE_IDS = ['risa', 'lloron', 'burla', 'beso', 'enojado', 'sorpresa', 'fuego', 'corazon', 'pulgar'];
 const faceCache = {};
 function drawFace(id) {
   if (faceCache[id]) return faceCache[id];
@@ -1131,6 +1150,14 @@ function drawFace(id) {
     g.fillStyle = '#ff2a55'; g.strokeStyle = '#7a0020'; g.lineWidth = 6;
     g.beginPath(); g.moveTo(64, 112); g.bezierCurveTo(8, 72, 14, 18, 64, 40); g.bezierCurveTo(114, 18, 120, 72, 64, 112); g.fill(); g.stroke();
     g.fillStyle = '#ffffff99'; g.beginPath(); g.ellipse(42, 46, 10, 6, -0.6, 0, 7); g.fill();
+  } else if (id === 'beso') {
+    face(); g.strokeStyle = '#2a1600'; g.lineWidth = 6;
+    g.beginPath(); g.moveTo(34, 54); g.quadraticCurveTo(44, 46, 54, 54); g.stroke();          // ojo cerrado
+    g.beginPath(); g.moveTo(74, 46); g.lineTo(90, 54); g.lineTo(74, 60); g.stroke();          // guiño
+    g.fillStyle = '#ff7aa0'; [[30, 74], [96, 74]].forEach(([x, y]) => { g.beginPath(); g.ellipse(x, y, 10, 6, 0, 0, 7); g.fill(); });
+    g.fillStyle = '#d4144a'; g.beginPath(); g.ellipse(58, 88, 10, 7, 0, 0, 7); g.fill(); g.beginPath(); g.ellipse(58, 98, 10, 7, 0, 0, 7); g.fill();   // labios
+    g.fillStyle = '#ff2a55'; g.strokeStyle = '#7a0020'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(98, 50); g.bezierCurveTo(82, 38, 86, 22, 98, 30); g.bezierCurveTo(110, 22, 114, 38, 98, 50); g.fill(); g.stroke();   // corazoncito
   } else if (id === 'pulgar') {
     g.fillStyle = '#39a900'; g.beginPath(); g.arc(64, 64, 58, 0, 7); g.fill();
     g.fillStyle = '#ffd9a0'; g.strokeStyle = '#3a2400'; g.lineWidth = 5;
@@ -1195,7 +1222,7 @@ function setModelOpacity(m, a) {
   });
 }
 function teammates() { const now = performance.now(); return [...remotes.values()].filter(r => r.has && now - r.last < 6000); }
-function canBeRevived() { return !!game.mp && game.mp.mode === 'coop' && teammates().length > 0; }
+function canBeRevived() { return !!game.mp && (game.mp.mode === 'coop' || game.mp.mode === 'survival') && teammates().length > 0; }
 function becomeGhost() {
   const p = player;
   p.dead = false; p.ghost = true; p.ghostT = 20; p.vx = p.vy = 0; p.pound = false;
@@ -1223,6 +1250,7 @@ function updateGhost(dt) {
   // si todo el equipo cayó, vuelven juntos al último checkpoint
   const mates = teammates();
   teamDownT = mates.length && mates.every(r => r.ghost || r.dead) ? teamDownT + dt : 0;
+  if (teamDownT > 1.2 && game.mp && game.mp.mode === 'survival') { teamDownT = 0; survivalOver(); return; }
   if (teamDownT > 1.2) { teamDownT = 0; toast('Equipo caído. Vuelven al checkpoint', 2200); endGhost(); resetPlayer(game.checkpoint); p.invT = 2; return; }
   if (p.ghostT <= 0 || !mates.length) { endGhost(); resetPlayer(game.checkpoint); p.invT = 2; return; }
 }
@@ -1253,6 +1281,7 @@ function myPlace() { const i = game.mp.order.findIndex(o => o.uid === game.mp.me
 function mpStats() {
   const s = { coins: game.coins, kills: game.runKills || 0, score: game.score };
   if (game.mp && game.mp.mode === 'race') { s.place = myPlace(); const o = game.mp.order.find(q => q.uid === game.mp.me); s.time = o ? o.t : 0; }
+  if (game.mp && game.mp.mode === 'survival') s.wave = game.mp.wave;
   return s;
 }
 let stompCd = 0, pushT = 0;
@@ -1269,7 +1298,7 @@ function raceContacts(dt) {
       continue;
     }
     // empujón: si chocan de lado se separan
-    if (Math.abs(dx) < 0.55 && Math.abs(p.y - r.y) < 0.9) moveX(p, (Math.sign(dx) || 1) * 3.2 * dt);
+    if (Math.abs(dx) < 0.55 && Math.abs(p.y - r.y) < 0.9) moveX(p, (Math.abs(dx) > 0.05 ? Math.sign(dx) : (game.mp.me < r.uid ? -1 : 1)) * 3.2 * dt);
   }
 }
 function gotStomped(uid, name) {
@@ -1309,8 +1338,121 @@ function updateRaceHud(dt) {
 function updateMpFx(dt) {
   updateBubbles(dt);
   if (!game.mp || !(game.state === 'play' || game.state === 'win')) return;
-  if (game.mp.mode === 'coop') checkRevives(dt);
-  else { raceContacts(dt); updateRaceHud(dt); }
+  const md = game.mp.mode;
+  if (md === 'coop') checkRevives(dt);
+  else if (md === 'race') { raceContacts(dt); updateRaceHud(dt); }
+  else if (md === 'battle') { raceContacts(dt); updateBattle(dt); }
+  else if (md === 'survival') { checkRevives(dt); updateSurvival(dt); }
+}
+
+
+// ================= Arenas para Batalla de monedas y Supervivencia =================
+function arenaSpec(kind) {
+  const W = 46, solid = [], blocks = [];
+  for (let y = 2; y < 14; y++) { solid.push([0, y], [1, y], [W - 2, y], [W - 1, y]); }   // paredes
+  const plat = (a, b, y) => { for (let x = a; x <= b; x++) solid.push([x, y]); };
+  plat(7, 12, 5); plat(33, 38, 5); plat(18, 27, 8); plat(3, 7, 10); plat(38, 42, 10); plat(20, 25, 12);
+  return { name: kind === 'battle' ? 'Batalla de monedas' : 'Supervivencia', theme: kind === 'battle' ? 'evening' : 'lava',
+    bg: kind === 'battle' ? 'atardecer' : 'volcano', style: kind === 'battle' ? 'grass' : 'volcano',
+    gaps: [], blocks, solid, pipes: [], coins: [], plats: [], fires: [], cannons: [], springs: [15.5, 30.5],
+    enemies: kind === 'battle' ? [[14, 2, 'robot-404'], [30, 2, 'robot-404'], [22, 9, 'archivo-corrupto']] : [],
+    flagX: W + 60, W, time: 999, checkpoint: 999, deathY: -3 };
+}
+// el que reparte las monedas / oleadas es el jugador con el id más bajo que siga en la partida (si el anfitrión se va, sigue otro)
+function isSpawner() {
+  const m = game.mp, ids = [m.me, ...teammates().map(r => r.uid)];
+  if (performance.now() - m.t0 < 5000) ids.push(...m.ids);   // al empezar todavía no llegan los estados: se usa el orden de la sala
+  return ids.sort()[0] === m.me;
+}
+const fmtTime = t => Math.floor(t / 60) + ':' + String(Math.max(0, Math.floor(t % 60))).padStart(2, '0');
+
+// ---- Batalla de monedas: 2 minutos, gana quien tenga más ----
+function battleSpawnCoin(i, x, y, v) {
+  const m = game.mp; if (!m || m.bcoins.has(i)) return;
+  const mesh = makeCoinMesh(); mesh.position.set(x, y, 0); if (v > 1) mesh.scale.setScalar(1.6);
+  levelGroup.add(mesh);
+  m.bcoins.set(i, { x, y, v, m: mesh, t: 0 });
+  burstColor(x, y, v > 1 ? 0xffd23f : 0xfff2a0, v > 1 ? 18 : 8, 3);
+}
+function battleRemoveCoin(i) { const c = game.mp && game.mp.bcoins.get(i); if (c) { levelGroup.remove(c.m); game.mp.bcoins.delete(i); } }
+const BATTLE_SPOTS = [[4, 2.6], [10, 2.6], [17, 2.6], [23, 2.6], [29, 2.6], [36, 2.6], [42, 2.6], [9, 6.6], [35, 6.6], [21, 9.6], [24, 9.6], [5, 11.6], [40, 11.6], [22, 13.6]];
+function updateBattle(dt) {
+  const m = game.mp, p = player;
+  m.battleLeft -= dt;
+  raceTimer.hidden = false; raceTimer.textContent = 'Batalla de monedas  ' + fmtTime(m.battleLeft);
+  if (isSpawner() && (m.coinT -= dt) <= 0) {
+    m.coinT = 1.1;
+    if (m.bcoins.size < 12) {
+      const [x, y] = BATTLE_SPOTS[Math.floor(Math.random() * BATTLE_SPOTS.length)];
+      const v = Math.random() < 0.12 ? 5 : 1, i = m.me.slice(0, 4) + (m.nextCoin++);
+      battleSpawnCoin(i, x + (Math.random() - 0.5) * 1.5, y, v); net('cspawn', { i, x: m.bcoins.get(i).x, y, v });
+    }
+  }
+  const tnow = performance.now() / 1000;
+  for (const [i, c] of m.bcoins) {
+    c.m.rotation.y = tnow * 3; c.m.position.y = c.y + Math.sin(tnow * 3 + c.x) * 0.1;
+    if (!p.ghost && !p.dead && Math.abs(c.x - p.x) < 0.7 && Math.abs(c.y - (p.y + 0.7)) < 1.0) {
+      battleRemoveCoin(i); net('cgrab', { i });
+      game.coins += c.v; addScore(c.v * 100); SFX.coin(); if (c.v > 1) toast('+5 monedas', 900);
+    }
+  }
+  updateScoreHud('coins', dt);
+  if (m.battleLeft <= 0 && !m.sent) { m.sent = true; raceTimer.textContent = 'Fin de la batalla'; toast('¡Tiempo!', 1600); SFX.win(); setTimeout(() => window.SenaMP && SenaMP.levelDone(mpStats()), 1200); }
+}
+// marcador en vivo (monedas en la batalla, bugs en supervivencia)
+function updateScoreHud(field, dt) {
+  if ((hudT -= dt) > 0) return; hudT = 0.25;
+  const rows = [{ name: 'Tú', v: field === 'coins' ? game.coins : (game.runKills | 0), me: true }, ...teammates().map(r => ({ name: r.name, v: field === 'coins' ? r.coins | 0 : r.kills | 0 }))];
+  rows.sort((a, b) => b.v - a.v);
+  const max = Math.max(1, ...rows.map(r => r.v));
+  raceHud.hidden = false;
+  raceHud.replaceChildren(...rows.map((r, i) => {
+    const d = document.createElement('div'); d.className = 'rrow' + (r.me ? ' me' : '') + (i === 0 && r.v > 0 ? ' done' : '');
+    const a = document.createElement('b'); a.textContent = (i + 1) + '.';
+    const n = document.createElement('span'); n.textContent = r.name + '  ' + r.v + (field === 'coins' ? ' mon.' : ' bugs');
+    const bar = document.createElement('i'); bar.style.setProperty('--w', Math.round(r.v / max * 100) + '%');
+    d.append(a, n, bar); return d;
+  }));
+}
+
+// ---- Supervivencia: oleadas cada vez más fuertes ----
+function survivalWaveList(n) {
+  const list = [], count = Math.min(14, 2 + n * 2), W = game.arena.W;
+  for (let k = 0; k < count; k++) {
+    const r = Math.random(), type = n >= 3 && r < 0.25 ? 'archivo-corrupto' : n >= 2 && r < 0.55 ? 'robot-entrega-tardia' : 'robot-404';
+    const side = k % 2 ? W - 4 - Math.random() * 6 : 3 + Math.random() * 6;
+    list.push({ id: n * 100 + k, type, x: Math.round(side * 10) / 10, y: type === 'archivo-corrupto' ? 7 + Math.round(Math.random() * 4) : 2 });
+  }
+  if (n % 5 === 0) list.push({ id: n * 100 + 99, type: 'boss', x: W / 2, y: 2 });
+  return list;
+}
+function survivalStartWave(n, list) {
+  const m = game.mp; if (!m || n <= m.wave || !levelGroup) return;
+  m.wave = n; m.waveBreak = 0;
+  list.forEach(q => {
+    addEnemy(q.x, q.y, q.type); const e = enemies[enemies.length - 1];
+    e.uid = q.id; e.wave = n; e.active = true; e.dir = q.x < game.arena.W / 2 ? 1 : -1;
+    e.def = Object.assign({}, e.def, { speed: e.def.speed * Math.min(2.2, 1 + (n - 1) * 0.12) });
+    burstColor(q.x, q.y + 0.6, 0xff4a4a, 12, 3);
+  });
+  if (player.ghost) reviveSelf(null, true);   // cada oleada nueva revive a los caídos
+  toast('Oleada ' + n + (n % 5 === 0 ? '  -  ¡BUG REY!' : ''), 1800); SFX.fanfare && n > 1 && SFX.oneup();
+}
+function survivalOver() {
+  const m = game.mp; if (!m || m.over) return;
+  m.over = true; endGhost(); toast('Cayó el equipo en la oleada ' + m.wave, 2600); SFX.die();
+  if (!m.sent) { m.sent = true; setTimeout(() => window.SenaMP && SenaMP.levelDone(mpStats()), 1800); }
+}
+function updateSurvival(dt) {
+  const m = game.mp; if (m.over) return;
+  const left = enemies.filter(e => e.alive && e.wave === m.wave && e.type !== 'bullet').length;
+  raceTimer.hidden = false;
+  raceTimer.textContent = m.wave === 0 ? 'Prepárense...' : left ? 'Oleada ' + m.wave + '  -  quedan ' + left + ' bugs' : 'Oleada ' + m.wave + ' superada';
+  if (isSpawner() && (m.wave === 0 || left === 0)) {
+    m.waveBreak += dt;
+    if (m.waveBreak > (m.wave === 0 ? 2.5 : 4)) { const n = m.wave + 1, list = survivalWaveList(n); survivalStartWave(n, list); net('wave', { n, list }); }
+  }
+  updateScoreHud('kills', dt);
 }
 
 // ================= Retos entre amigos =================
@@ -1416,6 +1558,11 @@ function die() {
 // recibir daño: si es grande se encoge, si es pequeño muere
 function damage() {
   if (player.ghost) return;
+  if (game.mp && game.mp.mode === 'battle') {
+    if (player.invT > 0) return;
+    const n = Math.min(3, game.coins); game.coins -= n; player.invT = 1.6; shake = 0.25; SFX.shrink();
+    toast(n ? 'Perdiste ' + n + ' monedas' : '¡Cuidado!', 1000); return;
+  }
   if (player.shieldT > 0 || player.dashT > 0) return;   // Estructura Estable / dash: invulnerable
   game.hurt = true;
   if (player.big) { player.big = false; player.growT = 0.8; player.invT = 2.0; SFX.shrink(); }
@@ -1427,6 +1574,7 @@ function grow() {
   player.big = true; player.growT = 0.8; SFX.powerup(); toast('¡GRANDE!', 900);
 }
 function afterDeath() {
+  if (game.mp && game.mp.mode === 'survival') { survivalOver(); return; }
   if (game.mp) { resetPlayer(game.checkpoint); player.invT = 2; return; }
   if (game.lives <= 0) recordBest();
   if (game.lives > 0) { game.time = levelSpec(game.level).time; resetPlayer(game.checkpoint); }

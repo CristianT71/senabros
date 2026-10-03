@@ -76,5 +76,11 @@ Agrega al final de la dirección:
 - **En equipo:** si caes quedas como fantasma 20 s; un compañero te revive tocándote. Si cae todo el equipo, vuelven al checkpoint.
 - **Carrera:** cada uno juega su propio mundo; gana el primero en la bandera (luego hay 30 s para los demás). Ranking en vivo,
   pisar a otro jugador lo aturde y le roba hasta 3 monedas, y chocar de lado empuja. Al final, podio en la sala.
+- **Batalla de monedas:** arena cerrada, 2 minutos. Las monedas (y alguna dorada de 5) las reparte un jugador para todos;
+  quien la toca primero se la queda. Pisar a otro le roba monedas y tocar un bug quita 3. Marcador en vivo y podio.
+- **Supervivencia:** en equipo contra oleadas de bugs cada vez más rápidas y numerosas; cada 5 oleadas sale el Bug Rey.
+  Los caídos reviven al empezar la siguiente oleada. Si cae todo el equipo termina y se muestra la oleada alcanzada.
+- **Red:** cada jugador solo envía su posición cuando cambia (y una señal de vida por segundo) para no pasar el límite de
+  mensajes de Realtime; los jugadores salen escalonados para no quedar pegados.
 - **Chat:** tecla T (o el botón Chat) durante el nivel; también en la sala. Mensajes rápidos, texto libre (máx. 60, con filtro
-  de groserías) y 8 caritas dibujadas por el juego (risa, llorón, burla, enojado, sorpresa, fuego, corazón, bien).
+  de groserías) y 9 caritas dibujadas por el juego (risa, llorón, burla, besito, enojado, sorpresa, fuego, corazón, bien).

@@ -742,7 +742,7 @@ body.mplevel:not(.menu):not(.map) #chatLog { display: flex; }
 #chatPanel { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 15; width: min(560px, 94vw); padding: 12px; border-radius: 18px;
   background: linear-gradient(180deg, #0d2a14f5, #061309f8); border: 3px solid var(--sena); box-shadow: 0 8px 0 var(--ink), 0 20px 50px #000a; animation: slideIn .25s both; }
 #chatPanel[hidden] { display: none; }
-.cp-faces, .lc-faces { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-bottom: 10px; }
+.cp-faces, .lc-faces { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; margin-bottom: 10px; }
 .cp-faces button, .lc-faces button { aspect-ratio: 1; padding: 4px; border-radius: 12px; border: 2px solid #ffffff2a; background: #0006; cursor: pointer; transition: transform .1s; }
 .cp-faces button:hover, .lc-faces button:hover { transform: scale(1.12); border-color: var(--gold); }
 .cp-faces img, .lc-faces img { width: 100%; height: 100%; display: block; }
