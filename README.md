@@ -32,6 +32,7 @@ SenaBros/
 │   ├── touch.js            Controles táctiles y ventana de ajustes (solo en celular)
 │   ├── online.js           Cuentas, amigos, retos y progreso en la nube (Supabase)
 │   ├── multiplayer.js      Salas en tiempo real (Supabase Realtime): presencia, posiciones y eventos
+│   ├── premios.js          Pantallas de Ranking, Logros y Tienda
 │   ├── assets.js           Rutas de modelos e imágenes (y ASSET_V para forzar una versión nueva)
 │   ├── libs/               Decodificador meshopt (para los .glb comprimidos)
 │   └── config.js           URL y llave pública (anon) de Supabase
@@ -46,6 +47,18 @@ SenaBros/
     ├── modelos/            .glb de Tripo y versiones optimizadas
     └── imagenes/           Fondos en alta resolución, retratos y referencias
 ```
+
+## Ranking, logros y tienda
+
+- **Ranking semanal** (botón Ranking del menú): mejor puntaje por nivel jugando solo, carreras ganadas, más monedas en una
+  batalla y oleada más alta en supervivencia. Se reinicia cada lunes (hora de Colombia); el primero lleva corona, también en la sala.
+  Se escribe solo con la función `submit_score` (el servidor valida tablero y rango) y se lee con `get_ranking`.
+- **Logros** (botón Logros): 17 logros que salen de contadores (`game_progress.stats`: bugs, monedas ganadas, carreras...).
+- **Tienda** (botón Tienda): 13 prendas y estelas hechas en 3D que se ajustan a la cabeza y espalda de cada instructor.
+  Las monedas disponibles son las monedas ganadas menos lo que costaron las prendas; las compras pasan por `buy_item`
+  y `equip_items`, que revisan precio y saldo en el servidor. Los demás jugadores te ven con tu ropa en línea.
+- Ojo: los contadores los envía el navegador, así que alguien con conocimientos podría inflarlos. Para un juego de
+  aprendizaje está bien; si algún día hay premios reales, habría que validar las partidas en un servidor.
 
 ## Agregar o cambiar un modelo
 

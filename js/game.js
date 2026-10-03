@@ -1532,7 +1532,8 @@ function updateSurvival(dt) {
 const STATS_KEY = 'senabros_stats', WARD_KEY = 'senabros_wardrobe';
 const readJSON = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || '') || d; } catch (_) { return d; } };
 let stats = readJSON(STATS_KEY, {});
-let wardrobe = readJSON(WARD_KEY, { owned: [], eq: {} });
+const normWard = w => ({ owned: Array.isArray(w && w.owned) ? w.owned : [], eq: (w && typeof w.eq === 'object' && w.eq) || {} });
+let wardrobe = normWard(readJSON(WARD_KEY, {}));
 let statsTimer = 0;
 function saveStats() {
   if (!persist) return;
@@ -1769,7 +1770,7 @@ window.SENA_SHOP = {
   preview(eq) { previewEq = eq; redress(); },
   turn(back) { shopTurn = back ? Math.PI * 0.8 : 0; },
   flush() { clearTimeout(statsTimer); if (persist) try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (_) {} },
-  setWardrobe(w) { wardrobe = { owned: (w && w.owned) || [], eq: (w && w.eq) || {} }; if (persist) try { localStorage.setItem(WARD_KEY, JSON.stringify(wardrobe)); } catch (_) {} achCheck(new Set()); redress(); },
+  setWardrobe(w) { const before = achUnlocked(); wardrobe = normWard(w); if (persist) try { localStorage.setItem(WARD_KEY, JSON.stringify(wardrobe)); } catch (_) {} achCheck(before); redress(); },
 };
 
 // ================= Retos entre amigos =================
@@ -2025,7 +2026,7 @@ window.SENA_RELOAD = () => {   // la nube trajo progreso nuevo: releerlo del alm
   Object.assign(game.progress, loadProgress()); game.world = game.progress.world;
   for (const k of Object.keys(powerData)) delete powerData[k];
   Object.assign(powerData, loadPowers()); setPowerUI();
-  stats = readJSON(STATS_KEY, {}); wardrobe = readJSON(WARD_KEY, { owned: [], eq: {} }); if (model) redress();
+  stats = readJSON(STATS_KEY, {}); wardrobe = normWard(readJSON(WARD_KEY, {})); if (model) redress();
 };
 window.SENA_BEST_SCORE = () => +(localStorage.getItem('senabros_best') || 0);
 window.SENA_SET_GUEST = on => {   // invitado: empieza de cero y no guarda; al salir se vuelve a leer lo guardado
