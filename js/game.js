@@ -202,8 +202,15 @@ TEX.skyBrick = canvasTex((g, s) => {
 TEX.skyStone = canvasTex((g, s) => { g.fillStyle = '#3a2f6a'; g.fillRect(0, 0, s, s); dots(g, s, '#2a2150'); g.fillStyle = '#5a4aa0'; g.fillRect(0, 0, s, 6); });
 TEX.belt = canvasTex((g, s) => { g.fillStyle = '#2b2f3a'; g.fillRect(0, 0, s, s); g.fillStyle = '#ffd23f'; for (let x = 0; x < s; x += 16) { g.beginPath(); g.moveTo(x, 8); g.lineTo(x + 8, 32); g.lineTo(x, 56); g.lineTo(x + 5, 56); g.lineTo(x + 13, 32); g.lineTo(x + 5, 8); g.fill(); } });
 TEX.belt.wrapS = T.RepeatWrapping;
+TEX.quiz = canvasTex((g, s) => {
+  g.fillStyle = '#1d4fd8'; g.fillRect(0, 0, s, s); g.strokeStyle = '#0a1f6a'; g.lineWidth = 4; g.strokeRect(2, 2, s - 4, s - 4);
+  g.fillStyle = '#0a1f6a'; [[8, 8], [52, 8], [8, 52], [52, 52]].forEach(([x, y]) => g.fillRect(x, y, 4, 4));
+  g.font = 'bold 26px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#0a1f6a'; g.fillText('</>', 34, 35); g.fillStyle = '#7ff0ff'; g.fillText('</>', 32, 33);
+});
 const MAT = {};
 for (const k in TEX) MAT[k] = new T.MeshStandardMaterial({ map: TEX[k], roughness: 0.85 });
+MAT.quiz = new T.MeshStandardMaterial({ map: TEX.quiz, roughness: 0.5, emissive: 0x1a3aa0, emissiveIntensity: 0.35 });
 MAT.lava = new T.MeshStandardMaterial({ map: TEX.lava, emissive: 0xffffff, emissiveMap: TEX.lava, emissiveIntensity: 0.9, roughness: 0.5 });
 // materiales del nivel actual (cambian con el tipo de nivel)
 const LM = { top: MAT.grass, fill: MAT.dirt, brick: MAT.brick, ceil: MAT.caveRock };
@@ -436,7 +443,16 @@ function levelSpec(i, w = game.world) {
     genLevel(6409, 0.95, 'Tormenta Eléctrica', 'storm', { bg: 'storm', style: 'cloud', kinds: ['bolts', 'skyIslands', 'bolts', 'fallers', 'blocks', 'bolts', 'movers', 'bolts', 'enemyRun'] }),
     genLevel(6511, 1.0, 'Castillo del Bug Supremo', 'skyfort', { bg: 'skycastle', style: 'skyfort', boss: 2, kinds: ['bolts', 'belts', 'fallers', 'cannons', 'skyIslands', 'enemyRun'] }),
   ]];
-  return LEVELS[w][i];
+  const L = LEVELS[w][i];
+  if (L && !L.quizDone) { L.quizDone = true; addQuizBlocks(L, w); }
+  return L;
+}
+// convierte 1 o 2 bloques "?" del nivel en bloques de pregunta (siempre los mismos)
+function addQuizBlocks(L, w) {
+  const q = L.blocks.filter(b => b[2] === '?' && b[1] <= 6);
+  if (!q.length) return;
+  const picks = q.length >= 4 ? [Math.floor(q.length * 0.3), Math.floor(q.length * 0.75)] : [Math.floor(q.length / 2)];
+  picks.forEach(i => { q[i][2] = 'Q'; });
 }
 function applyTheme(name) {
   const th = THEMES[name] || THEMES.day;
@@ -496,7 +512,7 @@ function buildLevel() {
       blockMesh[x + ',' + y] = m;
       cannons.push({ x: x + 0.5, y: y + 0.55, t: 1.2 + Math.random() * 1.5, barrel: m.userData.barrel });
     } else {
-      m = new T.Mesh(GEO.box, c === 'B' ? LM.brick : (c === '?' || c === 'M') ? MAT.question : c === 'S' ? MAT.stone : MAT.used);
+      m = new T.Mesh(GEO.box, c === 'B' ? LM.brick : (c === '?' || c === 'M') ? MAT.question : c === 'Q' ? MAT.quiz : c === 'S' ? MAT.stone : MAT.used);
       m.position.set(x + 0.5, y + 0.5, 0);
       blockMesh[x + ',' + y] = m;
     }
@@ -1693,6 +1709,9 @@ const ACHIEVEMENTS = [
   { id: 'mundo1', name: 'Yamboró liberado', desc: 'Completa todos los niveles del Mundo 1', icon: 'map', get: () => game.progress.done[0], goal: 6 },
   { id: 'mundo2', name: 'Volcán apagado', desc: 'Completa todos los niveles del Mundo 2', icon: 'flame', get: () => game.progress.done[1], goal: 5 },
   { id: 'mundo3', name: 'Nube despejada', desc: 'Completa todos los niveles del Mundo 3', icon: 'star', get: () => game.progress.done[2], goal: 5 },
+  { id: 'programador', name: 'Programador', desc: 'Responde bien 10 preguntas de programación', icon: 'code', stat: 'quizRight', goal: 10 },
+  { id: 'experto_adso', name: 'Experto ADSO', desc: 'Responde bien 50 preguntas de programación', icon: 'code', stat: 'quizRight', goal: 50 },
+  { id: 'racha', name: 'En racha', desc: 'Acierta 5 preguntas seguidas', icon: 'bolt', stat: 'quizStreak', goal: 5 },
   { id: 'cazador', name: 'Cazador de bugs', desc: 'Elimina 100 bugs', icon: 'bug', stat: 'kills', goal: 100 },
   { id: 'exterminador', name: 'Exterminador', desc: 'Elimina 1.000 bugs', icon: 'bug', stat: 'kills', goal: 1000 },
   { id: 'ahorrador', name: 'Ahorrador', desc: 'Junta 500 monedas', icon: 'coin', stat: 'coinsEarned', goal: 500 },
@@ -1922,7 +1941,7 @@ window.SENA_SHOP = {
 
 // ================= Niveles creados por jugadores (editor) =================
 // Formato del editor: { v:1, title, theme, W, rows: [14 textos de W letras] } (rows[0] = fila de abajo).
-// Letras: '#' suelo  B ladrillo  ? bloque  M hongo  S piedra  K cañón  p tubo  o moneda  1 2 3 bugs  ^ trampolín
+// Letras: '#' suelo  B ladrillo  ? bloque  Q pregunta  M hongo  S piedra  K cañón  p tubo  o moneda  1 2 3 bugs  ^ trampolín
 //         = plataforma ida/vuelta  | ascensor  _ plataforma que cae  f fuego  < > cinta  z rayo  I inicio  C checkpoint  F bandera
 const CUSTOM_THEMES = {
   yamboro:  { name: 'Yamboró', theme: 'day', bg: 'yamboro', style: 'grass' },
@@ -1954,7 +1973,7 @@ function editorToSpec(lv) {
       if ((c === '<' || c === '>') && !belt) belt = { c, x0: x };
       if (x >= W) continue;
       if (c === '#' && y >= 2) L.solid.push([x, y]);
-      else if (c === 'B' || c === '?' || c === 'M' || c === 'S' || c === 'K') { L.blocks.push([x, y, c]); if (c === 'K' && y > 2 && at(x, y - 1) === '.') L.solid.push([x, y - 1]); }
+      else if (c === 'B' || c === '?' || c === 'M' || c === 'S' || c === 'K' || c === 'Q') { L.blocks.push([x, y, c]); if (c === 'K' && y > 2 && at(x, y - 1) === '.') L.solid.push([x, y - 1]); }
       else if (c === 'p' && y === 2 && at(x - 1, 2) !== 'p') { let h = 0; while (at(x, 2 + h) === 'p') h++; L.pipes.push([x, Math.max(1, h)]); }
       else if (c === 'o') L.coins.push([x, x, y]);
       else if (c === '1') L.enemies.push([x, y, 'robot-404']);
@@ -1989,6 +2008,89 @@ function exitCustom(result) {
   transition(() => { game.custom = null; game.level = 0; buildLevel(); showTitle(); if (c.onExit) c.onExit(result || {}); });
 }
 window.SENA_CUSTOM = { play: playCustom, toSpec: editorToSpec, themes: CUSTOM_THEMES, exit: () => exitCustom({ quit: true }) };
+
+
+// ================= Preguntas de programación (bloque </>) =================
+// Al golpear un bloque </> el juego se pausa y sale una pregunta de ADSO. Acertar: +1 vida, +1000 y energía llena.
+// Fallar no quita nada: se muestra la respuesta y por qué. La dificultad sube con el mundo (ver js/preguntas.js).
+const QUIZ_KEY = 'senabros_quiz', QUIZ_TIME = 25;
+const quiz = { open: false, cur: null, order: [], t: 0, timer: 0, answered: false, streak: 0 };
+const quizEl = document.getElementById('quiz');
+function quizSeen() { try { return JSON.parse(localStorage.getItem(QUIZ_KEY) || '{}'); } catch (_) { return {}; } }
+function pickQuestion() {
+  const all = window.SENA_PREGUNTAS || [];
+  if (!all.length) return null;
+  const w = game.custom ? -1 : game.world, seen = quizSeen();
+  const pref = w === 0 ? [1, 1, 1, 2] : w === 1 ? [2, 2, 2, 1, 3] : w === 2 ? [3, 3, 3, 2] : [1, 2, 3];
+  const d = pref[Math.floor(Math.random() * pref.length)];
+  const pool = all.filter(p => p.d === d);
+  // primero las que nunca salieron, luego las que se fallaron, y al final cualquiera
+  const fresh = pool.filter(p => !(p.id in seen)), failed = pool.filter(p => seen[p.id] === 0);
+  const from = fresh.length ? fresh : failed.length ? failed : pool;
+  return from[Math.floor(Math.random() * from.length)];
+}
+function openQuiz() {
+  const q = pickQuestion(); if (!q) { popCoin(player.x, player.y + 2); addCoinCount(); return; }
+  quiz.cur = q; quiz.open = true; quiz.answered = false; quiz.t = QUIZ_TIME;
+  quiz.order = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
+  window.SENA_PAUSED = true; document.body.classList.add('quiz-open');
+  document.getElementById('qzTopic').textContent = q.t;
+  document.getElementById('qzQ').textContent = q.q;
+  const code = document.getElementById('qzCode'); code.hidden = !q.code; code.textContent = q.code || '';
+  const box = document.getElementById('qzOpts'); box.replaceChildren();
+  quiz.order.forEach((oi, k) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'qz-opt'; b.dataset.k = k;
+    const tag = document.createElement('b'); tag.textContent = 'ABCD'[k];
+    const txt = document.createElement('span'); txt.textContent = q.o[oi];
+    b.append(tag, txt); b.onclick = () => answerQuiz(k); box.appendChild(b);
+  });
+  document.getElementById('qzFeed').hidden = true; document.getElementById('qzNext').hidden = true;
+  quizEl.classList.add('show');
+  clearInterval(quiz.timer);
+  quiz.timer = setInterval(() => {
+    quiz.t -= 0.1; document.getElementById('qzBar').style.width = Math.max(0, quiz.t / QUIZ_TIME * 100) + '%';
+    if (quiz.t <= 0) answerQuiz(-1);
+  }, 100);
+}
+function answerQuiz(k) {
+  if (!quiz.open || quiz.answered) return;
+  quiz.answered = true; clearInterval(quiz.timer);
+  const q = quiz.cur, right = k >= 0 && quiz.order[k] === q.a;
+  document.querySelectorAll('#qzOpts .qz-opt').forEach((b, i) => {
+    b.disabled = true;
+    if (quiz.order[i] === q.a) b.classList.add('right'); else if (i === k) b.classList.add('wrong');
+  });
+  const seen = quizSeen(); seen[q.id] = right ? 1 : (seen[q.id] === 1 ? 1 : 0);
+  if (persist) try { localStorage.setItem(QUIZ_KEY, JSON.stringify(seen)); } catch (_) {}
+  const feed = document.getElementById('qzFeed'); feed.hidden = false; feed.className = 'qz-feed ' + (right ? 'ok' : 'bad');
+  document.getElementById('qzRes').textContent = right ? (quiz.streak >= 2 ? '¡Correcto! Racha de ' + (quiz.streak + 1) : '¡Correcto!') : k < 0 ? 'Se acabó el tiempo' : 'Casi...';
+  document.getElementById('qzWhy').textContent = (right ? '' : 'La respuesta es: ' + q.o[q.a] + '. ') + q.why;
+  document.getElementById('qzPrize').textContent = right ? '+1 vida  ·  +1000 puntos  ·  energía llena' : 'No pierdes nada. ¡La próxima la sacas!';
+  if (right) { quiz.streak++; SFX.oneup(); addStat('quizRight'); maxStat('quizStreak', quiz.streak); }
+  else { quiz.streak = 0; SFX.bump(); }
+  addStat('quizTotal');
+  quiz.reward = right;
+  const next = document.getElementById('qzNext'); next.hidden = false; setTimeout(() => next.focus(), 50);
+}
+function closeQuiz() {
+  if (!quiz.open || !quiz.answered) return;
+  quiz.open = false; quizEl.classList.remove('show'); document.body.classList.remove('quiz-open');
+  for (const k in keys) keys[k] = false;   // que no siga caminando con una tecla que se soltó durante la pregunta
+  window.SENA_PAUSED = false;
+  if (quiz.reward) {
+    game.lives++; addScore(1000); game.energy = ENERGY_MAX;
+    burstColor(player.x, player.y + 1.2, 0x7ff0ff, 50, 7); toast('+1 VIDA', 1200);
+  }
+}
+document.getElementById('qzNext').onclick = closeQuiz;
+addEventListener('keydown', e => {
+  if (!quiz.open) return;
+  e.stopImmediatePropagation(); e.preventDefault();
+  const k = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, KeyA: 0, KeyB: 1, KeyC: 2, KeyD: 3, Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3 }[e.code];
+  if (!quiz.answered && k != null) answerQuiz(k);
+  else if (quiz.answered && (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyJ')) closeQuiz();
+}, true);
+window.SENA_QUIZ = { open: openQuiz, answer: answerQuiz, close: closeQuiz, state: () => ({ open: quiz.open, answered: quiz.answered, id: quiz.cur && quiz.cur.id, right: quiz.cur && quiz.order.indexOf(quiz.cur.a) }) };
 
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
@@ -2141,7 +2243,12 @@ function killEnemy(e, how) {
   else { SFX.punch(); e.vy = 9; e.vx = player.facing * 3; e.mesh.rotation.z = Math.PI; }
 }
 function hitBlock(tx, ty, fromPlayer) {
-  const c = grid[tx] && grid[tx][ty], key = tx + ',' + ty;
+  let c = grid[tx] && grid[tx][ty]; const key = tx + ',' + ty;
+  if (c === 'Q' && (game.mp || netMute)) c = '?';   // en línea no se pausa a nadie: da moneda
+  if (c === 'Q') {
+    grid[tx][ty] = 'U'; if (blockMesh[key]) blockMesh[key].material = MAT.used;
+    bump(key); SFX.powerup(); openQuiz(); return;
+  }
   if (c === '?' || c === 'M' || (c === 'B' && fromPlayer)) net('block', { x: tx, y: ty });
   if (c === '?' || c === 'M') {
     grid[tx][ty] = 'U'; if (blockMesh[key]) blockMesh[key].material = MAT.used;
@@ -2158,7 +2265,7 @@ function hitBlock(tx, ty, fromPlayer) {
 function doPunch() {
   const p = player, tx = Math.floor(p.x + p.facing * (p.hw + 0.55));
   for (const ty of new Set([Math.floor(p.y + 0.45), Math.floor(p.y + 1.15)])) {
-    const c = grid[tx] && grid[tx][ty]; if (c === 'B' || c === '?' || c === 'M') hitBlock(tx, ty, true);
+    const c = grid[tx] && grid[tx][ty]; if (c === 'B' || c === '?' || c === 'M' || c === 'Q') hitBlock(tx, ty, true);
   }
   enemies.forEach(e => {
     const dx = (e.x - p.x) * p.facing;
@@ -3301,7 +3408,7 @@ Promise.all(enemyEntries.map(name =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
+  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), specAt: (w, i) => levelSpec(i, w), blockMat: (x, y) => { const m = blockMesh[x + ',' + y]; return m ? (m.material === MAT.quiz ? 'quiz' : m.material === MAT.question ? 'question' : 'otro') : null; }, gridAt: (x, y) => grid[x] && grid[x][y], boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
     remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName, cos: r.cos || '' })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor

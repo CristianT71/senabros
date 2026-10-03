@@ -16,7 +16,7 @@ const SVG = d => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" st
 const TOOLS = [
   { c: '.', name: 'Borrar', group: 'Básico' }, { c: 'pan', name: 'Mover vista', group: 'Básico' },
   { c: '#', name: 'Suelo', group: 'Bloques' }, { c: 'B', name: 'Ladrillo', group: 'Bloques' }, { c: '?', name: 'Bloque ?', group: 'Bloques' },
-  { c: 'M', name: 'Bloque hongo', group: 'Bloques' }, { c: 'S', name: 'Piedra', group: 'Bloques' }, { c: 'p', name: 'Tubo', group: 'Bloques' },
+  { c: 'M', name: 'Bloque hongo', group: 'Bloques' }, { c: 'Q', name: 'Bloque pregunta', group: 'Bloques' }, { c: 'S', name: 'Piedra', group: 'Bloques' }, { c: 'p', name: 'Tubo', group: 'Bloques' },
   { c: 'o', name: 'Moneda', group: 'Cosas' }, { c: '^', name: 'Trampolín', group: 'Cosas' },
   { c: '1', name: 'Robot 404', group: 'Bugs' }, { c: '2', name: 'Entrega tardía', group: 'Bugs' }, { c: '3', name: 'Archivo volador', group: 'Bugs' },
   { c: 'K', name: 'Cañón', group: 'Bugs' }, { c: 'f', name: 'Bola de fuego', group: 'Bugs' }, { c: 'z', name: 'Rayo', group: 'Bugs' },
@@ -24,7 +24,7 @@ const TOOLS = [
   { c: '>', name: 'Cinta a la derecha', group: 'Plataformas' }, { c: '<', name: 'Cinta a la izquierda', group: 'Plataformas' },
   { c: 'I', name: 'Inicio', group: 'Meta' }, { c: 'C', name: 'Checkpoint', group: 'Meta' }, { c: 'F', name: 'Bandera (meta)', group: 'Meta' },
 ];
-const PAINT = new Set(['.', '#', 'B', '?', 'S', 'o', '<', '>', 'M']);   // se pueden pintar arrastrando
+const PAINT = new Set(['.', '#', 'B', '?', 'S', 'o', '<', '>', 'M', 'Q']);   // se pueden pintar arrastrando
 const UNIQUE = new Set(['I', 'C', 'F']);
 const SNAP = { '^': 2, 'I': 2, 'C': 2, 'F': 2, 'f': 0, 'z': 13 };   // fila fija para algunas piezas
 const GROUND = {
@@ -46,6 +46,7 @@ function drawTile(g, c, x, y, s, theme) {
     case 'B': r('#c4572a', 0, 0, 1, 1); r('#3d1a0c', 0, 0.46, 1, 0.07); r('#3d1a0c', 0.48, 0, 0.07, 0.46); r('#3d1a0c', 0.2, 0.5, 0.07, 0.5); r('#e07a45', 0, 0, 1, 0.07); break;
     case '?': r('#f7b500', 0, 0, 1, 1); r('#8a5200', 0.04, 0.04, 0.92, 0.06); g.fillStyle = '#fff6d0'; g.font = `bold ${Math.round(s * 0.72)}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', x + s / 2, y + s * 0.55); break;
     case 'M': r('#f7b500', 0, 0, 1, 1); circ('#e8344a', 0.5, 0.55, 0.3); circ('#fff', 0.38, 0.48, 0.07); circ('#fff', 0.62, 0.5, 0.07); r('#f4e6c8', 0.38, 0.62, 0.24, 0.22); break;
+    case 'Q': r('#1d4fd8', 0, 0, 1, 1); r('#0a1f6a', 0.04, 0.04, 0.92, 0.06); g.fillStyle = '#7ff0ff'; g.font = `bold ${Math.round(s * 0.36)}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('</>', x + s / 2, y + s * 0.55); break;
     case 'S': r('#b0703c', 0, 0, 1, 1); r('#e0a070', 0, 0, 1, 0.1); r('#5a3418', 0, 0.9, 1, 0.1); break;
     case 'K': r('#222', 0.1, 0.35, 0.8, 0.65); circ('#111', 0.5, 0.35, 0.3); circ('#d4a020', 0.5, 0.35, 0.12); break;
     case 'p': r('#2fbf3a', 0.04, 0, 0.92, 1); r('#7be07f', 0.14, 0, 0.12, 1); break;

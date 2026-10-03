@@ -36,6 +36,7 @@ SenaBros/
 │   ├── multiplayer.js      Salas en tiempo real (Supabase Realtime): presencia, posiciones y eventos
 │   ├── premios.js          Pantallas de Ranking, Logros y Tienda
 │   ├── editor.js           Editor de niveles y niveles de la comunidad
+│   ├── preguntas.js        Banco de preguntas de programación (bloque </>)
 │   ├── assets.js           Rutas de modelos e imágenes (y ASSET_V para forzar una versión nueva)
 │   ├── libs/               Decodificador meshopt (para los .glb comprimidos)
 │   └── config.js           URL y llave pública (anon) de Supabase
@@ -62,6 +63,17 @@ SenaBros/
   y `equip_items`, que revisan precio y saldo en el servidor. Los demás jugadores te ven con tu ropa en línea.
 - Ojo: los contadores los envía el navegador, así que alguien con conocimientos podría inflarlos. Para un juego de
   aprendizaje está bien; si algún día hay premios reales, habría que validar las partidas en un servidor.
+
+## Preguntas de programación (bloque </>)
+
+- Cada nivel tiene 1 o 2 bloques azules **</>**. Al golpearlos el juego se pausa y sale una pregunta de ADSO
+  con 4 opciones y 25 segundos. Acertar da +1 vida, +1000 puntos y energía llena; fallar no quita nada y muestra
+  la respuesta correcta con una explicación.
+- 98 preguntas en `js/preguntas.js` (lógica, HTML, CSS, JavaScript, SQL, Python, POO, Git, Scrum, UML, seguridad,
+  algoritmos...). La dificultad sube con el mundo y primero salen las que el jugador no ha visto o falló.
+- Se responde con el ratón, el dedo o las teclas 1-4 / A-D; Enter continúa. En línea el bloque da una moneda (no se pausa a nadie).
+- Logros: Programador (10 correctas), Experto ADSO (50) y En racha (5 seguidas). En el editor está la pieza "Bloque pregunta".
+- Para agregar preguntas: copiar una línea de `js/preguntas.js`, cambiar el `id` y revisar que la respuesta sea correcta.
 
 ## Editor de niveles (botón Crear)
 
