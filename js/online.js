@@ -415,6 +415,13 @@ window.SenaOnline = {
   db,
   openAuth() { showScreen('auth'); },
   refreshFriends: () => loadFriends(),
+  // niveles de la comunidad (js/editor.js)
+  async publishLevel(title, theme, data) { const { data: code, error } = await db.rpc('publish_level', { title, theme, data }); return error ? { error: friendly(error) } : { code }; },
+  async listLevels(sort, q) { const { data, error } = await db.rpc('list_levels', { sort, q: q || '' }); return error ? { error: friendly(error) } : { rows: data || [] }; },
+  async getLevel(code) { const { data, error } = await db.rpc('get_level', { level_code: code }); return error ? { error: friendly(error) } : { level: (data || [])[0] }; },
+  async clearLevel(code) { await db.rpc('clear_level', { level_code: code }); },
+  async likeLevel(code, on) { const { data, error } = await db.rpc('like_level', { level_code: code, on_off: on }); return error ? null : data; },
+  async deleteLevel(code) { const { error } = await db.rpc('delete_level', { level_code: code }); return error ? friendly(error) : null; },
   // ranking semanal, tienda y campeones (js/premios.js)
   async submitScore(board, val) { if (!state.profile) return; const { error } = await db.rpc('submit_score', { board_name: board, val: Math.round(val) }); if (error) console.warn('ranking:', error.message); },
   async ranking(board, weeksAgo = 0) { const { data, error } = await db.rpc('get_ranking', { board_name: board, weeks_ago: weeksAgo }); return error ? { error: friendly(error) } : { rows: data || [] }; },

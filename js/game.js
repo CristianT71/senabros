@@ -415,6 +415,7 @@ function genLevel(seed, diff, name, theme, opts = {}) {
 let LEVELS = null;
 function levelSpec(i, w = game.world) {
   if (i === -1 && game.arena) return game.arena;
+  if (i === -2 && game.custom) return game.custom.spec;
   if (!LEVELS) LEVELS = [[
     lvl1(),
     genLevel(1207, 0.3, 'La Laguna', 'water', { bg: 'agua', water: true }),
@@ -1132,10 +1133,10 @@ function startLevel(i) {
   buildLevel();
   if (map.group) map.group.visible = false;
   levelGroup.visible = true; if (BG.mesh) BG.mesh.visible = true;
-  game.checkpoint = 3; game.time = L.time; game.state = 'play'; game.hurt = false;
-  resetPlayer(3); setMenu(false); setMap(false);
+  game.checkpoint = L.start || 3; game.time = L.time; game.state = 'play'; game.hurt = false;
+  resetPlayer(L.start || 3); setMenu(false); setMap(false);
   overlay.classList.remove('show');
-  worldLabel.textContent = i < 0 ? L.name : (game.world + 1) + '-' + (i + 1);
+  worldLabel.textContent = i === -2 ? 'CREADO' : i < 0 ? L.name : (game.world + 1) + '-' + (i + 1);
   toast(i < 0 ? L.name.toUpperCase() : (game.world + 1) + '-' + (i + 1) + '  ' + L.name.toUpperCase(), 1600);
 }
 function startGame() { startLevel(game.level); }   // reiniciar el nivel actual (R)
@@ -1153,6 +1154,7 @@ function transition(fn) {
 function completeLevel() {
   if (game.mp) { if (!game.mp.sent) { game.mp.sent = true; mpFinish(); } return; }
   if (game.challenge) { finishChallenge(); return; }
+  if (game.custom) { const c = game.custom; toast('¡NIVEL SUPERADO!', 1800); setTimeout(() => { if (game.custom === c) exitCustom({ won: true, score: game.score, coins: game.coins, time: c.spec.time - game.time }); }, 1600); return; }
   recordBest();
   { const before = achUnlocked(); addStat('levels'); if (!game.hurt) addStat('flawless');
     submitScore('nivel:' + (game.world + 1) + '-' + (game.level + 1), game.score); setTimeout(() => achCheck(before), 50); }
@@ -1683,8 +1685,8 @@ function saveStats() {
   clearTimeout(statsTimer);
   statsTimer = setTimeout(() => { try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }, 800);
 }
-function addStat(k, n = 1) { if (!persist || !n) return; const before = achUnlocked(); stats[k] = (stats[k] | 0) + n; saveStats(); achCheck(before); }
-function maxStat(k, v) { if (!persist || (stats[k] | 0) >= v) return; const before = achUnlocked(); stats[k] = v | 0; saveStats(); achCheck(before); }
+function addStat(k, n = 1) { if (!persist || !n || game.custom) return; const before = achUnlocked(); stats[k] = (stats[k] | 0) + n; saveStats(); achCheck(before); }
+function maxStat(k, v) { if (!persist || game.custom || (stats[k] | 0) >= v) return; const before = achUnlocked(); stats[k] = v | 0; saveStats(); achCheck(before); }
 
 const ACHIEVEMENTS = [
   { id: 'primer_nivel', name: 'Primer día', desc: 'Completa tu primer nivel', icon: 'flag', stat: 'levels', goal: 1 },
@@ -1917,6 +1919,77 @@ window.SENA_SHOP = {
   setWardrobe(w) { const before = achUnlocked(); wardrobe = normWard(w); if (persist) try { localStorage.setItem(WARD_KEY, JSON.stringify(wardrobe)); } catch (_) {} achCheck(before); redress(); },
 };
 
+
+// ================= Niveles creados por jugadores (editor) =================
+// Formato del editor: { v:1, title, theme, W, rows: [14 textos de W letras] } (rows[0] = fila de abajo).
+// Letras: '#' suelo  B ladrillo  ? bloque  M hongo  S piedra  K cañón  p tubo  o moneda  1 2 3 bugs  ^ trampolín
+//         = plataforma ida/vuelta  | ascensor  _ plataforma que cae  f fuego  < > cinta  z rayo  I inicio  C checkpoint  F bandera
+const CUSTOM_THEMES = {
+  yamboro:  { name: 'Yamboró', theme: 'day', bg: 'yamboro', style: 'grass' },
+  laguna:   { name: 'La Laguna', theme: 'water', bg: 'agua', style: 'water', water: true },
+  selva:    { name: 'La Selva', theme: 'jungle', bg: 'selva', style: 'grass' },
+  cueva:    { name: 'La Cueva', theme: 'cave', bg: 'cueva', style: 'cave', cave: true },
+  volcan:   { name: 'Volcán', theme: 'lava', bg: 'volcano', style: 'volcano', lava: true },
+  nube:     { name: 'La Nube', theme: 'sky', bg: 'sky', style: 'cloud' },
+  hielo:    { name: 'Hielo', theme: 'icesky', bg: 'icesky', style: 'ice', ice: true },
+  datos:    { name: 'Autopista de Datos', theme: 'datahwy', bg: 'datahwy', style: 'tech' },
+  tormenta: { name: 'Tormenta', theme: 'storm', bg: 'storm', style: 'cloud' },
+};
+function editorToSpec(lv) {
+  const th = CUSTOM_THEMES[lv.theme] || CUSTOM_THEMES.yamboro, W = lv.W, R = lv.rows;
+  const at = (x, y) => (R[y] && R[y][x]) || '.';
+  const L = { name: lv.title || 'Mi nivel', theme: th.theme, bg: th.bg, style: th.style, water: !!th.water, cave: !!th.cave, lava: !!th.lava, ice: !!th.ice, noStal: true,
+    gaps: [], blocks: [], solid: [], pipes: [], coins: [], enemies: [], plats: [], springs: [], fires: [], cannons: [], belts: [], bolts: [], custom: true };
+  let gap0 = -1, flagX = -1, start = 3, cp = 999;
+  for (let x = 0; x <= W; x++) {   // huecos: columnas sin suelo abajo
+    const hole = x < W && at(x, 0) !== '#';
+    if (hole && gap0 < 0) gap0 = x;
+    if (!hole && gap0 >= 0) { L.gaps.push([gap0, x - 1]); gap0 = -1; }
+  }
+  for (let y = 0; y < 14; y++) {
+    let belt = null;
+    for (let x = 0; x <= W; x++) {
+      const c = x < W ? at(x, y) : '.';
+      if (belt && (c !== belt.c)) { L.belts.push([belt.x0, x - 1, y, belt.c === '>' ? 1 : -1]); belt = null; }
+      if ((c === '<' || c === '>') && !belt) belt = { c, x0: x };
+      if (x >= W) continue;
+      if (c === '#' && y >= 2) L.solid.push([x, y]);
+      else if (c === 'B' || c === '?' || c === 'M' || c === 'S' || c === 'K') { L.blocks.push([x, y, c]); if (c === 'K' && y > 2 && at(x, y - 1) === '.') L.solid.push([x, y - 1]); }
+      else if (c === 'p' && y === 2 && at(x - 1, 2) !== 'p') { let h = 0; while (at(x, 2 + h) === 'p') h++; L.pipes.push([x, Math.max(1, h)]); }
+      else if (c === 'o') L.coins.push([x, x, y]);
+      else if (c === '1') L.enemies.push([x, y, 'robot-404']);
+      else if (c === '2') L.enemies.push([x, y, 'robot-entrega-tardia']);
+      else if (c === '3') L.enemies.push([x, y, 'archivo-corrupto']);
+      else if (c === '^') L.springs.push(x + 0.5);
+      else if (c === '=') L.plats.push({ x, y, w: 3, type: 'h', range: 4, speed: 1.7 });
+      else if (c === '|') L.plats.push({ x, y, w: 3, type: 'v', range: 4, speed: 1.6 });
+      else if (c === '_') L.plats.push({ x: x + 0.5, y, w: 2, type: 'f' });
+      else if (c === 'f') L.fires.push(x + 0.5);
+      else if (c === 'z') L.bolts.push(x);
+      else if (c === 'I') start = x + 0.5;
+      else if (c === 'C') cp = x;
+      else if (c === 'F') flagX = x;
+    }
+  }
+  if (flagX < 0) flagX = W - 2;
+  L.flagX = flagX; L.W = Math.max(W, flagX + 14); L.time = 300; L.checkpoint = cp; L.start = start;
+  L.deathY = L.lava ? 0.85 : -3;
+  if (L.cave) L.ceilingEnd = Math.max(0, flagX - 12);
+  return L;
+}
+// jugar un nivel del editor o de la comunidad; al terminar (o al salir) se vuelve a quien lo abrió
+function playCustom(lv, opts = {}) {
+  game.custom = { spec: editorToSpec(lv), lv, onExit: opts.onExit, code: opts.code };
+  Object.assign(game, { score: 0, coins: 0, lives: 3 });
+  startLevel(-2);
+}
+function exitCustom(result) {
+  const c = game.custom; if (!c || c.exiting) return;
+  c.exiting = true;   // el nivel sigue existiendo hasta que la transición tapa la pantalla
+  transition(() => { game.custom = null; game.level = 0; buildLevel(); showTitle(); if (c.onExit) c.onExit(result || {}); });
+}
+window.SENA_CUSTOM = { play: playCustom, toSpec: editorToSpec, themes: CUSTOM_THEMES, exit: () => exitCustom({ quit: true }) };
+
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
 window.SENA_LEVELS = () => WORLDS.flatMap((Wd, w) => Array.from({ length: Wd.count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name })));
@@ -2038,6 +2111,7 @@ function grow() {
 function afterDeath() {
   if (game.mp && game.mp.mode === 'survival') { survivalOver(); return; }
   if (game.mp) { resetPlayer(game.checkpoint); player.invT = 2; return; }
+  if (game.custom && game.lives <= 0) { exitCustom({ lost: true }); return; }
   if (game.lives <= 0) recordBest();
   if (game.lives > 0) { game.time = levelSpec(game.level).time; resetPlayer(game.checkpoint); }
   else {
@@ -2194,7 +2268,7 @@ const powerUnlocked = (id = curPowerId()) => !!pstat(id).unlocked;
 function savePowers() { if (!persist) return; try { localStorage.setItem('senabros_powers', JSON.stringify(powerData)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
 // suma progreso a la misión del instructor actual y lo desbloquea al cumplirla
 function missionProgress(stat, n = 1) {
-  if (netMute || game.mp) return;   // las misiones se cumplen jugando solo
+  if (netMute || game.mp || game.custom) return;   // las misiones se cumplen jugando solo (no en niveles creados)
   const id = curPowerId(), M = MISSIONS[id], d = pstat(id);
   if (d.unlocked || !M || M.stat !== stat) return;
   d[stat] = (d[stat] || 0) + n; savePowers();
@@ -2470,7 +2544,7 @@ addEventListener('keydown', e => {
     if (e.code === 'ArrowDown' || e.code === 'KeyS') mapMove(0, 1);
     if (e.code === 'Enter' || e.code === 'Space') mapEnter();
     if (e.code === 'Escape') transition(() => showTitle());
-  } else if (e.code === 'Escape' && game.state === 'play') { if (game.mp) { if (window.SenaMP) SenaMP.leaveLevel(); } else transition(() => showMap({ banner: false })); }
+  } else if (e.code === 'Escape' && game.state === 'play') { if (game.mp) { if (window.SenaMP) SenaMP.leaveLevel(); } else if (game.custom) exitCustom({ quit: true }); else transition(() => showMap({ banner: false })); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 const held = (...c) => c.some(k => keys[k]);
