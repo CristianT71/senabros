@@ -42,6 +42,7 @@ const SFX = {
   swim: () => beep(520, 0.09, 'sine', 0.05, 260),
   sprout: () => beep(200, 0.5, 'square', 0.04, 500),
   powerup: () => { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => setTimeout(() => beep(f, 0.09, 'square', 0.04), i * 60)); },
+  zap: () => { beep(1800, 0.05, 'sawtooth', 0.05, -1500); setTimeout(() => beep(90, 0.35, 'sawtooth', 0.06, -40), 40); },
   shrink: () => { [784, 659, 523, 392].forEach((f, i) => setTimeout(() => beep(f, 0.1, 'square', 0.045), i * 80)); },
   oneup: () => { [659, 784, 1319, 1047, 1175, 1568].forEach((f, i) => setTimeout(() => beep(f, 0.1, 'square', 0.04), i * 90)); },
 };
@@ -187,6 +188,20 @@ TEX.lava = canvasTex((g, s) => {
   g.fillStyle = '#c42a00'; for (let i = 0; i < 8; i++) g.fillRect((i * 41 + 7) % s, (i * 19 + 3) % s, 8, 3);
 });
 TEX.lava.wrapS = TEX.lava.wrapT = T.RepeatWrapping; TEX.lava.magFilter = T.LinearFilter;
+// Mundo 3: nubes, hielo, metal de servidores y castillo morado
+TEX.cloudTop = canvasTex((g, s) => { g.fillStyle = '#cfe2f8'; g.fillRect(0, 0, s, s); dots(g, s, '#b4cfee', 22); g.fillStyle = '#a9c6ea'; for (let x = -8; x < s; x += 16) { g.beginPath(); g.arc(x + 8, 14, 11, 0, 7); g.fill(); } g.fillStyle = '#ffffff'; for (let x = -8; x < s; x += 16) { g.beginPath(); g.arc(x + 8, 10, 10, 0, 7); g.fill(); } });
+TEX.cloudFill = canvasTex((g, s) => { g.fillStyle = '#c9def5'; g.fillRect(0, 0, s, s); dots(g, s, '#b3cdeb'); g.fillStyle = '#e4f0ff'; for (let i = 0; i < 6; i++) { g.beginPath(); g.arc((i * 23) % s, (i * 37) % s, 6, 0, 7); g.fill(); } });
+TEX.iceTop = canvasTex((g, s) => { g.fillStyle = '#9fd8f5'; g.fillRect(0, 0, s, s); g.fillStyle = '#d8f3ff'; g.fillRect(0, 0, s, 12); g.fillStyle = '#ffffff'; g.fillRect(6, 3, 20, 3); g.fillRect(38, 5, 14, 2); g.strokeStyle = '#7cbfe0'; g.lineWidth = 2; g.beginPath(); g.moveTo(10, 30); g.lineTo(24, 44); g.lineTo(20, 58); g.moveTo(44, 20); g.lineTo(52, 40); g.stroke(); });
+TEX.iceFill = canvasTex((g, s) => { g.fillStyle = '#7cc4e8'; g.fillRect(0, 0, s, s); g.strokeStyle = '#a8dcf5'; g.lineWidth = 2; for (let i = 0; i < 5; i++) { g.beginPath(); g.moveTo((i * 17) % s, 0); g.lineTo((i * 29 + 10) % s, s); g.stroke(); } });
+TEX.techTop = canvasTex((g, s) => { g.fillStyle = '#2a3550'; g.fillRect(0, 0, s, s); g.fillStyle = '#3d4d72'; g.fillRect(0, 0, s, 8); g.fillStyle = '#39e6ff'; g.fillRect(0, 8, s, 3); g.fillStyle = '#1a2238'; for (let x = 4; x < s; x += 16) g.fillRect(x, 20, 8, 8); g.fillStyle = '#39e6ff'; g.fillRect(8, 44, 4, 4); g.fillRect(40, 30, 4, 4); });
+TEX.techFill = canvasTex((g, s) => { g.fillStyle = '#1e2740'; g.fillRect(0, 0, s, s); g.strokeStyle = '#2f3d60'; g.lineWidth = 3; g.strokeRect(4, 4, s - 8, s - 8); g.fillStyle = '#39e6ff'; g.fillRect(10, 10, 4, 4); g.fillStyle = '#7a8cff'; g.fillRect(s - 14, s - 14, 4, 4); });
+TEX.skyBrick = canvasTex((g, s) => {
+  g.fillStyle = '#6a52c8'; g.fillRect(0, 0, s, s); g.fillStyle = '#9a86ff'; g.fillRect(0, 0, s, 3);
+  g.fillStyle = '#241650'; for (let r = 0; r < 4; r++) { g.fillRect(0, r * 16 + 14, s, 2); for (let x = (r % 2 ? 16 : 0); x < s; x += 32) g.fillRect(x, r * 16, 2, 16); }
+});
+TEX.skyStone = canvasTex((g, s) => { g.fillStyle = '#3a2f6a'; g.fillRect(0, 0, s, s); dots(g, s, '#2a2150'); g.fillStyle = '#5a4aa0'; g.fillRect(0, 0, s, 6); });
+TEX.belt = canvasTex((g, s) => { g.fillStyle = '#2b2f3a'; g.fillRect(0, 0, s, s); g.fillStyle = '#ffd23f'; for (let x = 0; x < s; x += 16) { g.beginPath(); g.moveTo(x, 8); g.lineTo(x + 8, 32); g.lineTo(x, 56); g.lineTo(x + 5, 56); g.lineTo(x + 13, 32); g.lineTo(x + 5, 8); g.fill(); } });
+TEX.belt.wrapS = T.RepeatWrapping;
 const MAT = {};
 for (const k in TEX) MAT[k] = new T.MeshStandardMaterial({ map: TEX[k], roughness: 0.85 });
 MAT.lava = new T.MeshStandardMaterial({ map: TEX.lava, emissive: 0xffffff, emissiveMap: TEX.lava, emissiveIntensity: 0.9, roughness: 0.5 });
@@ -214,6 +229,13 @@ const THEMES = {
   fortress:{ sun: 0xff8a50, sunI: 0.55, hemi: 0x8a4a4a, hemiI: 0.55, bg: 0xffffff, fog: 0x1a0504 },
   lavamap:{ sun: 0xffc090, sunI: 1.35, hemi: 0xffb090, hemiI: 0.6, bg: 0xffffff, fog: 0x3a1a14 },
   mountain:{ sun: 0xfff4e0, sunI: 1.6, hemi: 0xdfefff, hemiI: 0.8, bg: 0xffffff, fog: 0xb5d6f0 },
+  // Mundo 3: La Nube
+  sky:      { sun: 0xfffaf0, sunI: 1.7, hemi: 0xe6f4ff, hemiI: 0.95, bg: 0xffffff, fog: 0xbfe2ff },
+  icesky:   { sun: 0xe8f6ff, sunI: 1.5, hemi: 0xd2ecff, hemiI: 1.0, bg: 0xffffff, fog: 0xcfe9ff },
+  datahwy:  { sun: 0xd6e8ff, sunI: 1.2, hemi: 0x8fb6ff, hemiI: 0.8, bg: 0xffffff, fog: 0x1a2a5a },
+  storm:    { sun: 0xb8c4ff, sunI: 0.8, hemi: 0x6a74a8, hemiI: 0.65, bg: 0xffffff, fog: 0x1a1d33 },
+  skyfort:  { sun: 0xd0b8ff, sunI: 0.9, hemi: 0x7a6aa8, hemiI: 0.65, bg: 0xffffff, fog: 0x140c2a },
+  cloudmap: { sun: 0xfff4e6, sunI: 1.25, hemi: 0xcfe6ff, hemiI: 0.75, bg: 0xffffff, fog: 0x8fc2f5 },
 };
 function lvl1() {
   const solid = [];
@@ -240,7 +262,7 @@ function genLevel(seed, diff, name, theme, opts = {}) {
   let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1)), pick = a => a[Math.floor(rnd() * a.length)];
   const L = { name, theme, bg: opts.bg, water: !!opts.water, cave: !!opts.cave, lava: !!opts.lava, ship: !!opts.ship, style: opts.style || (opts.cave ? 'cave' : opts.water ? 'water' : 'grass'),
-    noStal: !!opts.noStal, gaps: [], blocks: [], solid: [], pipes: [], coins: [], enemies: [], plats: [], springs: [], fires: [], cannons: [] };
+    noStal: !!opts.noStal, ice: !!opts.ice, gaps: [], blocks: [], solid: [], pipes: [], coins: [], enemies: [], plats: [], springs: [], fires: [], cannons: [], belts: [], bolts: [] };
   const W404 = 'robot-404', CHG = 'robot-entrega-tardia', FLY = 'archivo-corrupto';
   const enemyChance = 0.35 + diff * 0.5;
   let x = 14, mushrooms = 0;
@@ -344,6 +366,24 @@ function genLevel(seed, diff, name, theme, opts = {}) {
       L.enemies.push([x + 4, ri(5, 8), FLY]);
       if (rnd() < 0.5) L.enemies.push([x + 8, 2, W404]);
       x += 12;
+    } else if (k === 'skyIslands') {  // islas de nube sobre el vacío
+      const g = ri(9, 12);
+      L.gaps.push([x + 2, x + 1 + g]);
+      for (let px = x + 3, n = 0; px < x + g; px += 4, n++) { const y = 3 + (n % 2) * 2; for (let j = 0; j < 2; j++) L.solid.push([px + j, y]); L.coins.push([px, px + 1, y + 2]); }
+      if (rnd() < 0.6) L.enemies.push([x + 2 + g / 2, 8, FLY]);
+      x += g + 5;
+    } else if (k === 'belts') {       // cintas transportadoras (empujan a un lado)
+      const len = ri(6, 9), dir = rnd() < 0.5 ? 1 : -1, y = ri(2, 3);
+      L.belts.push([x + 2, x + 1 + len, y, dir]);
+      if (y > 2) L.gaps.push([x + 3, x + len]);
+      L.coins.push([x + 3, x + len, y + 3]);
+      if (rnd() < enemyChance) L.enemies.push([x + 3 + len / 2, y + 1, W404]);
+      x += len + 6;
+    } else if (k === 'bolts') {       // rayos: avisan y luego caen
+      const n = ri(2, 3);
+      for (let j = 0; j < n; j++) L.bolts.push(x + 3 + j * 4);
+      L.coins.push([x + 2, x + 2 + n * 4, 5]);
+      x += n * 4 + 5;
     } else if (k === 'enemyRun') {
       L.enemies.push([x + 8, 2, CHG]);
       if (diff > 0.5) L.enemies.push([x + 5, 2, W404]);
@@ -357,7 +397,7 @@ function genLevel(seed, diff, name, theme, opts = {}) {
     const a0 = x + 2;
     L.arena = a0; L.bossWall = a0 + 24;
     for (let h = 0; h <= 8; h++) L.solid.push([L.bossWall, 2 + h]);
-    L.enemies.push([a0 + 17, 2, 'boss']);
+    L.enemies.push([a0 + 17, 2, opts.boss === 2 ? 'boss2' : 'boss']);
     L.flagX = a0 + 28; L.W = L.flagX + 14;
     L.checkpoint = a0 - 3;
   } else {
@@ -388,6 +428,12 @@ function levelSpec(i, w = game.world) {
     genLevel(5307, 0.8, 'Puente de Lava', 'lava', { bg: 'volcano', lava: true, style: 'volcano', kinds: ['lavaLake', 'movers', 'fallers', 'vmovers', 'lavaPit', 'lavaLake', 'movers'] }),
     genLevel(5409, 0.9, 'Mina de Datos', 'lavacave', { bg: 'cueva', lava: true, cave: true, style: 'lavacave', kinds: ['lavaPit', 'blocks', 'fallers', 'enemyRun', 'springs', 'lavaPit', 'highroad', 'movers'] }),
     genLevel(5511, 1.0, 'Fortaleza del Bug Rey', 'fortress', { bg: 'fortress', lava: true, cave: true, noStal: true, style: 'fortress', boss: true, kinds: ['lavaPit', 'fallers', 'cannons', 'lavaPit', 'vmovers', 'enemyRun'] }),
+  ], [
+    genLevel(6101, 0.7, 'Puerta de la Nube', 'sky', { bg: 'sky', style: 'cloud', kinds: ['skyIslands', 'blocks', 'springs', 'movers', 'skyIslands', 'highroad', 'fallers', 'enemyRun', 'skyIslands'] }),
+    genLevel(6203, 0.8, 'Servidores Congelados', 'icesky', { bg: 'icesky', style: 'ice', ice: true, kinds: ['gap', 'blocks', 'stairs', 'enemyRun', 'gap', 'floating', 'coinsRun', 'highroad', 'stairs'] }),
+    genLevel(6307, 0.85, 'Autopista de Datos', 'datahwy', { bg: 'datahwy', style: 'tech', kinds: ['belts', 'blocks', 'belts', 'vmovers', 'belts', 'cannons', 'belts', 'movers', 'enemyRun'] }),
+    genLevel(6409, 0.95, 'Tormenta Eléctrica', 'storm', { bg: 'storm', style: 'cloud', kinds: ['bolts', 'skyIslands', 'bolts', 'fallers', 'blocks', 'bolts', 'movers', 'bolts', 'enemyRun'] }),
+    genLevel(6511, 1.0, 'Castillo del Bug Supremo', 'skyfort', { bg: 'skycastle', style: 'skyfort', boss: 2, kinds: ['bolts', 'belts', 'fallers', 'cannons', 'skyIslands', 'enemyRun'] }),
   ]];
   return LEVELS[w][i];
 }
@@ -406,6 +452,7 @@ function makeGrid(L) {
   for (let x = 0; x < W; x++) if (!L.gaps.some(([a, b]) => x >= a && x <= b)) { set(x, 0, 'G'); set(x, 1, 'G'); }
   L.blocks.forEach(([x, y, c]) => set(x, L.cave ? Math.min(y, 8) : y, c));   // en la cueva, debajo del techo
   L.solid.forEach(([x, y]) => set(x, y, 'S'));
+  (L.belts || []).forEach(([x0, x1, y]) => { for (let x = x0; x <= x1; x++) set(x, y, 'P'); });   // sólido invisible: la cinta se dibuja aparte
   set(FLAGX, 2, 'S');
   L.pipes.forEach(([x, h]) => { for (let y = 2; y < 2 + h; y++) { set(x, y, 'P'); set(x + 1, y, 'P'); } });
   if (L.cave) for (let x = 0; x < L.ceilingEnd; x++) { set(x, 11, 'C'); set(x, 12, 'C'); set(x, 13, 'C'); }
@@ -426,6 +473,10 @@ function buildLevel() {
     ship:     [MAT.deck, MAT.hull, MAT.brick, MAT.hull],
     lavacave: [MAT.volcTop, MAT.volcRock, MAT.redBrick, MAT.volcRock],
     fortress: [MAT.castleTop, MAT.castle, MAT.castle, MAT.castle],
+    cloud:    [MAT.cloudTop, MAT.cloudFill, MAT.brick, MAT.cloudFill],
+    ice:      [MAT.iceTop, MAT.iceFill, MAT.iceFill, MAT.iceFill],
+    tech:     [MAT.techTop, MAT.techFill, MAT.techFill, MAT.techFill],
+    skyfort:  [MAT.skyStone, MAT.skyBrick, MAT.skyBrick, MAT.skyStone],
   }[L.style] || [MAT.grass, MAT.dirt, MAT.brick, MAT.caveRock];
   [LM.top, LM.fill, LM.brick, LM.ceil] = ST;
   plats = []; springs = []; fires = []; cannons = []; bossE = null; bossBar.classList.remove('on');
@@ -497,6 +548,7 @@ function buildLevel() {
   (L.plats || []).forEach(d => addPlat(d, L));
   (L.springs || []).forEach(x => addSpring(x));
   (L.fires || []).forEach((x, i) => addFire(x, i));
+  buildBelts(L); buildBolts(L);
   if (L.water) {   // superficie del agua y velo azul delante de la escena
     const surf = new T.Mesh(new T.PlaneGeometry(W + 40, 0.25), new T.MeshBasicMaterial({ color: 0xbff4ff, transparent: true, opacity: 0.55 }));
     surf.position.set(W / 2, WATER_TOP, 0.6); levelGroup.add(surf);
@@ -556,7 +608,7 @@ function setBackdrop(key) {
   load(ASSET_URL('fondos/' + key + '.webp'));
 }
 // Fondos dibujados por código (Mundo 2): volcán, océano al atardecer y fortaleza
-const PROC_BG = { volcano: 1, ocean: 1, fortress: 1 };
+const PROC_BG = { volcano: 1, ocean: 1, fortress: 1, sky: 1, icesky: 1, datahwy: 1, storm: 1, skycastle: 1 };
 function drawBackdrop(key) {
   const c = document.createElement('canvas'); c.width = 1920; c.height = 1080; const g = c.getContext('2d');
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -595,6 +647,41 @@ function drawBackdrop(key) {
     g.fillStyle = gr; g.fillRect(0, 640, 1920, 440);
     for (let i = 0; i < 220; i++) { const y = 650 + rnd() * 430; g.fillStyle = `rgba(255,${200 + rnd() * 55},170,${0.15 + (y < 820 && Math.abs(rnd() * 600) < 300 ? 0.35 : 0)})`; g.fillRect(1300 + (rnd() - 0.5) * (y - 560) * 1.6, y, 30 + rnd() * 90, 3); }
     for (let i = 0; i < 120; i++) { g.fillStyle = 'rgba(180,210,255,0.18)'; g.fillRect(rnd() * 1920, 660 + rnd() * 420, 40 + rnd() * 120, 2); }
+  } else if (key === 'sky' || key === 'icesky' || key === 'storm' || key === 'skycastle') {
+    const pal = { sky: ['#4aa8ff', '#9ad4ff', '#e6f6ff'], icesky: ['#7fb8e8', '#c4e4fa', '#f4fbff'], storm: ['#0c0e1e', '#262a4a', '#4a4e78'], skycastle: ['#120a2a', '#3a2470', '#8a5ac8'] }[key];
+    let gr = g.createLinearGradient(0, 0, 0, 1080); gr.addColorStop(0, pal[0]); gr.addColorStop(0.55, pal[1]); gr.addColorStop(1, pal[2]);
+    g.fillStyle = gr; g.fillRect(0, 0, 1920, 1080);
+    const dark = key === 'storm' || key === 'skycastle';
+    if (!dark) glow(1500, 200, 260, 'rgba(255,250,220,0.9)');
+    else for (let i = 0; i < 120; i++) { g.fillStyle = `rgba(255,255,255,${0.3 + rnd() * 0.6})`; g.fillRect(rnd() * 1920, rnd() * 500, 2, 2); }
+    const puff = (x, y, r, col) => {
+      const shade = dark ? 'rgba(20,22,48,0.9)' : key === 'icesky' ? 'rgba(170,205,235,0.9)' : 'rgba(180,210,240,0.9)';
+      const n = 7 + Math.floor(rnd() * 4);
+      for (let k = 0; k < n; k++) {
+        const t = k / (n - 1), bx = x + (t - 0.5) * r * 3.2, by = y - Math.sin(t * Math.PI) * r * (0.5 + rnd() * 0.4), br = r * (0.45 + Math.sin(t * Math.PI) * 0.55) * (0.85 + rnd() * 0.3);
+        const gr2 = g.createRadialGradient(bx - br * 0.3, by - br * 0.4, br * 0.1, bx, by, br); gr2.addColorStop(0, col); gr2.addColorStop(0.7, col); gr2.addColorStop(1, shade);
+        g.fillStyle = gr2; g.beginPath(); g.arc(bx, by, br, 0, 7); g.fill();
+      }
+      g.fillStyle = shade; g.beginPath(); g.ellipse(x, y + r * 0.35, r * 1.75, r * 0.32, 0, 0, 7); g.fill();
+    };
+    const cloudCol = dark ? ['rgba(60,64,110,0.9)', 'rgba(40,44,80,0.95)'] : key === 'icesky' ? ['rgba(255,255,255,0.85)', 'rgba(220,240,255,0.95)'] : ['rgba(255,255,255,0.8)', 'rgba(240,248,255,0.95)'];
+    for (let i = 0; i < 18; i++) puff((i % 6) * 330 + rnd() * 200, 140 + Math.floor(i / 6) * 220 + rnd() * 120, 30 + rnd() * 40, cloudCol[0]);
+    if (key === 'icesky') for (let i = 0; i < 7; i++) { const x = 120 + i * 270 + rnd() * 60, h = 260 + rnd() * 220; g.fillStyle = 'rgba(160,210,240,0.8)'; g.beginPath(); g.moveTo(x - 60, 1080); g.lineTo(x, 1080 - h); g.lineTo(x + 60, 1080); g.fill(); g.fillStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.moveTo(x - 18, 1080 - h + 60); g.lineTo(x, 1080 - h); g.lineTo(x + 18, 1080 - h + 60); g.fill(); }
+    if (key === 'storm') { g.strokeStyle = 'rgba(200,230,255,0.85)'; g.lineWidth = 6; [[400, 80], [1350, 40]].forEach(([x, y]) => { g.beginPath(); g.moveTo(x, y); let cx = x, cy = y; for (let k = 0; k < 7; k++) { cx += (rnd() - 0.5) * 90; cy += 70; g.lineTo(cx, cy); } g.stroke(); glow(x, y + 200, 260, 'rgba(160,200,255,0.25)'); }); }
+    if (key === 'skycastle') {
+      g.fillStyle = '#1a0f38'; [[760, 360, 400, 520], [700, 300, 70, 250], [1090, 300, 70, 250], [905, 190, 110, 340]].forEach(([x, y, w, h]) => g.fillRect(x, y, w, h));
+      g.fillStyle = '#ffd23f'; for (let i = 0; i < 16; i++) g.fillRect(790 + (i % 8) * 44, 420 + Math.floor(i / 8) * 90, 14, 24);
+      glow(960, 200, 220, 'rgba(160,100,255,0.45)');
+    }
+    for (let i = 0; i < 12; i++) puff(i * 175 + rnd() * 60, 900 + rnd() * 120, 70 + rnd() * 50, cloudCol[1]);
+  } else if (key === 'datahwy') {
+    let gr = g.createLinearGradient(0, 0, 0, 1080); gr.addColorStop(0, '#060a1e'); gr.addColorStop(0.6, '#142a6a'); gr.addColorStop(1, '#2a5ac8');
+    g.fillStyle = gr; g.fillRect(0, 0, 1920, 1080);
+    for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(57,230,255,${0.2 + rnd() * 0.5})`; g.fillRect(rnd() * 1920, rnd() * 600, 2, 2); }
+    for (let i = 0; i < 12; i++) { const x = i * 170 + rnd() * 40, h = 300 + rnd() * 380, w = 90 + rnd() * 50; g.fillStyle = '#0c1430'; g.fillRect(x, 1080 - h, w, h);
+      for (let y = 1080 - h + 20; y < 1060; y += 26) for (let k = 0; k < 3; k++) { g.fillStyle = rnd() < 0.6 ? '#39e6ff' : rnd() < 0.5 ? '#7a8cff' : '#1a2448'; g.fillRect(x + 12 + k * (w - 30) / 2, y, 10, 6); } }
+    g.strokeStyle = 'rgba(57,230,255,0.5)'; g.lineWidth = 3; for (let k = 0; k < 6; k++) { g.beginPath(); g.moveTo(0, 700 + k * 60); g.bezierCurveTo(600, 640 + k * 70, 1300, 760 + k * 50, 1920, 690 + k * 60); g.stroke(); }
+    glow(960, 1080, 600, 'rgba(57,180,255,0.35)');
   } else {   // fortress
     g.fillStyle = '#1a0c0e'; g.fillRect(0, 0, 1920, 1080);
     for (let r = 0; r < 28; r++) for (let x = -(r % 2) * 60; x < 1920; x += 120) {
@@ -789,12 +876,13 @@ function updateSprings(dt) {
 function updateBoss(e, dt) {
   const p = player, dx = p.x - e.x;
   e.inv -= dt;
-  bossBar.classList.add('on'); bossFill.style.width = (e.hp / 3 * 100) + '%';
+  if (!bossBar.classList.contains('on')) document.getElementById('bossName').textContent = e.def.name || 'BUG REY';
+  bossBar.classList.add('on'); bossFill.style.width = (e.hp / e.maxHp * 100) + '%';
   e.vy = Math.max(-MAXFALL, e.vy - GRAV * dt);
-  const angry = 3 - e.hp;
+  const angry = (e.maxHp - e.hp) * 3 / e.maxHp;
   if (e.ground) {
     e.bt -= dt; e.dir = Math.sign(dx) || e.dir;
-    if (e.bt <= 0) { e.vy = 16 + angry; e.jvx = Math.sign(dx) * Math.min(5 + angry, Math.abs(dx) * 1.2); e.bt = 2.3 - angry * 0.45; SFX.jump(); }
+    if (e.bt <= 0) { e.vy = 16 + angry; e.jvx = Math.sign(dx) * Math.min(5 + angry, Math.abs(dx) * 1.2); e.bt = 2.3 - angry * 0.45; SFX.jump(); if (e.def.hp === 5) strikeAt(p.x, 1.1); }   // el Bug Supremo llama rayos
     else moveX(e, e.dir * (1.3 + angry * 0.7) * dt);
   } else if (moveX(e, e.jvx * dt)) e.jvx = 0;
   const wasG = e.ground, r = moveY(e, e.vy * dt);
@@ -821,7 +909,8 @@ function updateBoss(e, dt) {
 function bossDefeated() {
   const L = levelSpec(game.level);
   if (!netMute) addStat('bossKills');
-  if (L.bossWall == null) { bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8; toast('¡BUG REY DERROTADO!', 2600); return; }
+  const bossName = (bossE && bossE.def.name) || 'BUG REY';
+  if (L.bossWall == null) { bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8; toast('¡' + bossName + ' DERROTADO!', 2600); return; }
   bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8;
   toast('¡BUG REY DERROTADO!', 2600);
   for (let h = 0; h <= 8; h++) {
@@ -866,6 +955,7 @@ const ENEMY_TYPES = {
   'robot-entrega-tardia': { scale: 1.35, speed: 1.0, hw: 0.38, h: 1.25, kind: 'charger', score: 200 },
   'archivo-corrupto':     { scale: 1.2,  speed: 1.5, hw: 0.5,  h: 1.1,  kind: 'flyer',   score: 300 },
   'boss':                 { scale: 3.1,  speed: 1.4, hw: 1.3,  h: 2.75, kind: 'boss',    score: 5000, tmpl: 'archivo-corrupto' },
+  'boss2':                { scale: 3.4,  speed: 1.7, hw: 1.45, h: 3.0,  kind: 'boss',    score: 8000, tmpl: 'robot-entrega-tardia', hp: 5, name: 'BUG SUPREMO', tint: [0.55, 0.6, 1.35], glow: 0x22106a },
 };
 const ENEMY_SPAWNS = [
   [22, 2, 'robot-404'], [34, 2, 'robot-entrega-tardia'], [45, 6, 'archivo-corrupto'],
@@ -878,13 +968,66 @@ function addEnemy(x, y, type) {
   const def = ENEMY_TYPES[type], tmpl = enemyTemplates[def.tmpl || type];
   const g = new T.Group(), body = new T.Group(); g.add(body);
   const model3d = tmpl.clone(true); body.add(model3d);
-  if (def.kind === 'boss') model3d.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiply(new T.Color(1, 0.45, 0.4)); o.material.emissive = new T.Color(0x5a0000); } });
+  if (def.kind === 'boss') model3d.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiply(new T.Color(...(def.tint || [1, 0.45, 0.4]))); o.material.emissive = new T.Color(def.glow || 0x5a0000); } });
   body.scale.setScalar(def.scale);
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   g.position.set(x, y, 0); levelGroup.add(g);
   enemies.push({ x, y, x0: x, y0: y, vx: 0, vy: 0, dir: -1, hw: def.hw, h: def.h, def, type, alive: true, active: false,
-    mesh: g, body, deadT: 0, mode: '', t: Math.random() * 10, charging: false, rotY: 0, hp: 3, inv: 0, bt: 2, jvx: 0, ground: false });
+    mesh: g, body, deadT: 0, mode: '', t: Math.random() * 10, charging: false, rotY: 0, hp: def.hp || 3, maxHp: def.hp || 3, inv: 0, bt: 2, jvx: 0, ground: false });
   if (def.kind === 'boss') bossE = enemies[enemies.length - 1];
+}
+
+
+// ================= Mundo 3: hielo, cintas transportadoras y rayos =================
+const onIce = p => p.grounded && !p.onPlat && !!(levelSpec(game.level) || {}).ice;
+let belts = [], bolts = [];
+function beltUnder(e) { for (const b of belts) if (e.x > b.x0 - 0.2 && e.x < b.x1 + 1.2 && Math.abs(e.y - (b.y + 1)) < 0.06) return b; return null; }
+function buildBelts(L) {
+  belts = (L.belts || []).map(([x0, x1, y, dir]) => {
+    const tex = TEX.belt.clone(); tex.needsUpdate = true; tex.wrapS = T.RepeatWrapping; tex.repeat.set(x1 - x0 + 1, 1);
+    const top = new T.MeshStandardMaterial({ map: tex, roughness: 0.6 }), side = new T.MeshStandardMaterial({ color: 0x1c2030, roughness: 0.5, metalness: 0.4 });
+    const m = new T.Mesh(new T.BoxGeometry(x1 - x0 + 1, 1, 1.6), [side, side, top, side, side, side]);
+    m.position.set((x0 + x1 + 1) / 2, y + 0.5, 0); m.receiveShadow = m.castShadow = true; levelGroup.add(m);
+    [x0 + 0.2, x1 + 0.8].forEach(rx => { const r = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 1.7, 16), new T.MeshStandardMaterial({ color: 0xffd23f, metalness: 0.5, roughness: 0.4 })); r.rotation.x = Math.PI / 2; r.position.set(rx, y + 0.5, 0); levelGroup.add(r); });
+    return { x0, x1, y, dir, tex };
+  });
+}
+const boltMat = new T.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: 0.9, depthWrite: false });
+const warnMat = new T.MeshBasicMaterial({ color: 0xffe14a, transparent: true, opacity: 0.6, depthWrite: false });
+function buildBolts(L) {
+  bolts = (L.bolts || []).map((x, i) => mkBolt(x + 0.5, 3.2, 1.2 + i * 0.9));
+}
+function mkBolt(x, period, t0, once) {
+  const ring = new T.Mesh(new T.RingGeometry(0.35, 0.6, 24), warnMat.clone()); ring.rotation.x = -Math.PI / 2; ring.visible = false; levelGroup.add(ring);
+  const beam = new T.Group();
+  for (let k = 0; k < 7; k++) { const seg = new T.Mesh(new T.BoxGeometry(0.22, 2.1, 0.22), boltMat); seg.position.set(Math.sin(k * 2.3) * 0.25, 1 + k * 2, 0); seg.rotation.z = Math.sin(k * 1.7) * 0.4; beam.add(seg); }
+  beam.position.x = x; beam.visible = false; levelGroup.add(beam);
+  return { x, period, t: -t0, ring, beam, once };
+}
+function strikeAt(x, delay) { if (levelGroup) bolts.push(mkBolt(x, 99, delay, true)); }   // rayo suelto (lo llama el jefe)
+function groundYAt(x) { const tx = Math.floor(x); for (let y = 12; y >= 0; y--) if (grid[tx] && grid[tx][y]) return y + 1; return -5; }
+function updateBolts(dt) {
+  for (let i = bolts.length - 1; i >= 0; i--) {
+    const b = bolts[i]; b.t += dt;
+    const ph = b.t < 0 ? -1 : b.t % b.period, warn = ph >= 0 && ph < 1.0, hit = ph >= 1.0 && ph < 1.35;
+    const gy = groundYAt(b.x);
+    b.ring.visible = warn; b.ring.position.set(b.x, gy + 0.05, 0.2);
+    if (warn) { b.ring.material.opacity = 0.35 + 0.45 * Math.abs(Math.sin(ph * 14)); b.ring.scale.setScalar(1 + ph * 0.8); }
+    if (hit && !b.beam.visible) { SFX.zap(); shake = Math.max(shake, 0.2); flashSky(); burstColor(b.x, gy + 0.3, 0xbfe8ff, 16, 5); }
+    b.beam.visible = hit; b.beam.position.y = gy;
+    if (hit) { b.beam.children.forEach((s2, k) => { s2.position.x = (Math.random() - 0.5) * 0.4; s2.rotation.z = (Math.random() - 0.5) * 0.8; });
+      const p = player; if (game.state === 'play' && !p.dead && !p.ghost && p.invT <= 0 && Math.abs(p.x - b.x) < 0.75) damage(); }
+    if (b.once && ph >= 1.4) { levelGroup.remove(b.ring, b.beam); bolts.splice(i, 1); }
+  }
+  belts.forEach(b => { b.tex.offset.x -= b.dir * dt * 3.4; });
+  updateSkyFlash(dt);
+}
+let skyFlash = 0;
+function flashSky() { skyFlash = 0.25; }
+function updateSkyFlash(dt) {
+  if (skyFlash <= 0) return;
+  skyFlash -= dt;
+  if (BG.mesh) { if (skyFlash > 0) BG.mesh.material.color.setRGB(1.6, 1.6, 1.8); else BG.mesh.material.color.set(BG.tint); }
 }
 
 // ================= Física de bloques =================
@@ -948,9 +1091,9 @@ function loadProgress() {
   // done/node por mundo; acepta el formato viejo (números sueltos del Mundo 1)
   try {
     const p = JSON.parse(localStorage.getItem('senabros_progress') || '{}');
-    const d = Array.isArray(p.done) ? p.done : [p.done | 0, 0], n = Array.isArray(p.node) ? p.node : [p.node | 0, 0];
-    return { done: [d[0] | 0, d[1] | 0], node: [n[0] | 0, n[1] | 0], world: p.world | 0 };
-  } catch (_) { return { done: [0, 0], node: [0, 0], world: 0 }; }
+    const d = Array.isArray(p.done) ? p.done : [p.done | 0], n = Array.isArray(p.node) ? p.node : [p.node | 0];
+    return { done: [d[0] | 0, d[1] | 0, d[2] | 0], node: [n[0] | 0, n[1] | 0, n[2] | 0], world: Math.min(2, p.world | 0) };
+  } catch (_) { return { done: [0, 0, 0], node: [0, 0, 0], world: 0 }; }
 }
 let persist = true;   // false en modo invitado: no se guarda nada (ni en el navegador ni en la nube)
 function saveProgress() { if (!persist) return; try { localStorage.setItem('senabros_progress', JSON.stringify(game.progress)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }
@@ -1170,8 +1313,8 @@ window.SENA_MP = {
   remove: removeRemote,
   active: () => !!game.mp,
   backToMenu: () => { stopMP(); showTitle(); },
-  levels: () => [0, 1].flatMap(w => Array.from({ length: WORLDS[w].count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name,
-    open: i <= game.progress.done[w] && (w === 0 || game.progress.done[0] >= WORLDS[0].count) || i === 0 && w === 0 }))),
+  levels: () => WORLDS.flatMap((Wd, w) => Array.from({ length: Wd.count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name,
+    open: i <= game.progress.done[w] && (w === 0 || game.progress.done[w - 1] >= WORLDS[w - 1].count) || i === 0 && w === 0 }))),
   char: () => CHARS[charIdx][0],
   chat: (uid, kind, val) => { if (game.mp) showBubble(uid, kind, val); },
   me: () => game.mp && game.mp.me,
@@ -1547,6 +1690,7 @@ const ACHIEVEMENTS = [
   { id: 'primer_nivel', name: 'Primer día', desc: 'Completa tu primer nivel', icon: 'flag', stat: 'levels', goal: 1 },
   { id: 'mundo1', name: 'Yamboró liberado', desc: 'Completa todos los niveles del Mundo 1', icon: 'map', get: () => game.progress.done[0], goal: 6 },
   { id: 'mundo2', name: 'Volcán apagado', desc: 'Completa todos los niveles del Mundo 2', icon: 'flame', get: () => game.progress.done[1], goal: 5 },
+  { id: 'mundo3', name: 'Nube despejada', desc: 'Completa todos los niveles del Mundo 3', icon: 'star', get: () => game.progress.done[2], goal: 5 },
   { id: 'cazador', name: 'Cazador de bugs', desc: 'Elimina 100 bugs', icon: 'bug', stat: 'kills', goal: 100 },
   { id: 'exterminador', name: 'Exterminador', desc: 'Elimina 1.000 bugs', icon: 'bug', stat: 'kills', goal: 1000 },
   { id: 'ahorrador', name: 'Ahorrador', desc: 'Junta 500 monedas', icon: 'coin', stat: 'coinsEarned', goal: 500 },
@@ -1775,7 +1919,7 @@ window.SENA_SHOP = {
 
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
-window.SENA_LEVELS = () => [0, 1].flatMap(w => Array.from({ length: WORLDS[w].count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name })));
+window.SENA_LEVELS = () => WORLDS.flatMap((Wd, w) => Array.from({ length: Wd.count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name })));
 window.SENA_PLAY_CHALLENGE = ch => {   // la llama js/online.js al pulsar "Jugar" en un reto
   if (game.state === 'loading' || transitioning || charLoading) return false;
   transition(() => {
@@ -1828,7 +1972,7 @@ function startGlory() {
   const w = game.world, [file, label] = CHARS[charIdx];
   game.state = 'glory'; addScore(5000); game.lives++;
   document.getElementById('gTitle').textContent = '¡' + WORLDS[w].name + ' COMPLETADO!';
-  document.getElementById('gSub').textContent = w === 0 ? 'Yamboró quedó libre de bugs · ¡se abrió el Mundo 2!' : '¡Derrotaste al Bug Rey! SENA BROS completado';
+  document.getElementById('gSub').textContent = ['Yamboró quedó libre de bugs · ¡se abrió el Mundo 2!', '¡Derrotaste al Bug Rey! · ¡se abrió el Mundo 3: La Nube!', '¡Derrotaste al Bug Supremo! SENA BROS completado'][w] || '';
   document.getElementById('gPortrait').src = (window.PORTRAITS && window.PORTRAITS[file]) || '';
   document.getElementById('gChar').textContent = label.toUpperCase();
   document.getElementById('gScore').textContent = String(game.score).padStart(6, '0');
@@ -1851,7 +1995,7 @@ function gloryContinue() {
   SFX.powerup();
   transition(() => {
     gloryEl.classList.remove('show'); document.getElementById('confetti').innerHTML = '';
-    if (w === 0) { game.world = 1; pg.world = 1; pg.node[1] = 0; saveProgress(); showMap({ banner: true }); }
+    if (w < WORLDS.length - 1) { const to = w + 1; pg.node[to] = pipeNodeIn(to, w); game.world = to; pg.world = to; saveProgress(); showMap({ banner: true }); }
     else showMap({ banner: false, finale: true });
   });
 }
@@ -2032,12 +2176,12 @@ window.SENA_BEST_SCORE = () => +(localStorage.getItem('senabros_best') || 0);
 window.SENA_SET_GUEST = on => {   // invitado: empieza de cero y no guarda; al salir se vuelve a leer lo guardado
   persist = !on;
   if (on) {
-    Object.assign(game.progress, { done: [0, 0], node: [0, 0], world: 0 }); game.world = 0;
+    Object.assign(game.progress, { done: [0, 0, 0], node: [0, 0, 0], world: 0 }); game.world = 0;
     for (const k of Object.keys(powerData)) delete powerData[k];
     setPowerUI(); stats = {}; wardrobe = { owned: [], eq: {} }; if (model) redress();
   } else window.SENA_RELOAD();
 };
-window.SENA_STATS = () => ({ best: window.SENA_BEST_SCORE(), levels: game.progress.done[0] + game.progress.done[1], totalLevels: 11,
+window.SENA_STATS = () => ({ best: window.SENA_BEST_SCORE(), levels: game.progress.done.reduce((a, b) => a + b, 0), totalLevels: WORLDS.reduce((a, w) => a + w.count, 0),
   powers: Object.values(powerData).filter(d => d.unlocked).length, totalPowers: 7 });
 window.SENA_CURRENT_CHAR = () => [CHARS[charIdx][0], CHARS[charIdx][1]];
 window.SENA_POWER_INFO = () => { const id = curPowerId(), P = POWERS[id], M = MISSIONS[id], d = pstat(id);
@@ -2375,11 +2519,12 @@ function updatePlayer(dt) {
     const max = (run ? RUN : WALK) * (p.slowT > 0 ? 1.35 : 1);
     if (dir) {
       const turning = Math.sign(p.vx) === -dir && Math.abs(p.vx) > 1;
-      const acc = p.grounded ? (turning ? 50 : 26) : 18;
+      const slip = onIce(p);
+      const acc = p.grounded ? (slip ? (turning ? 12 : 9) : (turning ? 50 : 26)) : 18;
       p.vx += dir * acc * dt;
       if (Math.abs(p.vx) > max) p.vx = approach(p.vx, dir * max, 30 * dt);
       p.facing = dir;
-    } else p.vx = approach(p.vx, 0, (p.grounded ? (p.crouch ? 10 : 28) : 5) * dt);
+    } else p.vx = approach(p.vx, 0, (p.grounded ? (onIce(p) ? 2.2 : p.crouch ? 10 : 28) : 5) * dt);
 
     if (WATER_LVL) {
       // nado: cada pulsación de salto es una brazada; se hunde lento; S baja más rápido
@@ -2412,6 +2557,7 @@ function updatePlayer(dt) {
 
   const wasGround = p.grounded, fallV = p.vy;
   if (moveX(p, p.vx * dt)) p.vx = 0;
+  if (p.grounded) { const b = beltUnder(p); if (b) moveX(p, b.dir * 3.4 * dt); }   // la cinta arrastra
   const yPrev = p.y;
   const r = moveY(p, p.vy * dt);
   p.grounded = !!(r && r.ground);
@@ -2608,7 +2754,7 @@ function update(dt) {
   const tnow = performance.now() / 1000;
   coins.forEach(c => { if (!c.taken) { c.m.rotation.y = tnow * 2.2 + c.ph; c.m.position.y = c.y + Math.sin(tnow * 3 + c.ph) * 0.08; } });
   updateRemotes(dt); updateMpFx(dt); updateTrails(dt);
-  updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateSparks(dt); updatePfx(dt); updatePowerUI();
+  updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateBolts(dt); updateSparks(dt); updatePfx(dt); updatePowerUI();
   if (MAT.lava.map) { MAT.lava.map.offset.x = tnow * 0.05; MAT.lava.map.offset.y = Math.sin(tnow * 0.7) * 0.04; MAT.lava.emissiveIntensity = 0.8 + Math.sin(tnow * 3) * 0.15; }
   if (flag) flag.userData.cloth.rotation.y = Math.sin(tnow * 3) * 0.15;
 
@@ -2702,8 +2848,14 @@ const WORLDS = [
   { name: 'MUNDO 2', sub: 'Volcán Binario', count: 5, theme: 'lavamap',
     style: { ground: 'basalt', river: 0, lava: true, bridgeZ: -3 },
     nodes: [{ p: [-13, 1], pipe: true, to: 0, label: 'Tubería al Mundo 1' }, { p: [-8, 1] }, { p: [-3, 1] }, { p: [-3, -3] }, { p: [3, -3] },
-            { p: [9, -3], castle: true }] },
+            { p: [9, -3], castle: true }, { p: [15, -3], pipe: true, to: 2, label: 'Tubería al Mundo 3' }] },
+  { name: 'MUNDO 3', sub: 'La Nube', count: 5, theme: 'cloudmap',
+    style: { ground: 'cloud', river: 4, sky: true, bridgeZ: 3 },
+    nodes: [{ p: [-14, -2], pipe: true, to: 1, label: 'Tubería al Mundo 2' }, { p: [-9, -2] }, { p: [-4, -2] }, { p: [-4, 3] }, { p: [1, 3] },
+            { p: [9, 3], castle: true }] },
 ];
+// índice del nodo de llegada al viajar por tubería de un mundo a otro
+const pipeNodeIn = (to, from) => Math.max(0, WORLDS[to].nodes.findIndex(n => n.pipe && n.to === from));
 let MAPN = WORLDS[0].nodes;
 const map = { group: null, cur: 0, move: null, panels: [], x: 0, z: 0, rot: -Math.PI / 2, camX: 0, camZ: 0, t: 0, bannerTimer: 0 };
 const PANEL_COL = { done: '#39a900', open: '#1d4fd8', locked: '#5b5f6b' };
@@ -2812,11 +2964,15 @@ function makeShip() {
   return g;
 }
 function buildMap() {
-  const Wd = WORLDS[game.world], st = Wd.style, lavaW = st.lava;
+  const Wd = WORLDS[game.world], st = Wd.style, lavaW = st.lava, skyW = !!st.sky;
   const g = new T.Group(); map.group = g; map.world = game.world; scene.add(g); g.visible = false;
   // suelo: pasto (Mundo 1) o basalto con grietas de lava (Mundo 2)
   const groundTex = canvasTex((c, s2) => {
-    if (!lavaW) {
+    if (skyW) {
+      c.fillStyle = '#c4dcf7'; c.fillRect(0, 0, s2, s2);
+      c.fillStyle = '#b1cdf0'; for (let i = 0; i < 18; i++) { c.beginPath(); c.arc((i * 29) % s2, (i * 41) % s2, 4, 0, 7); c.fill(); }
+      c.fillStyle = '#ffffff'; for (let i = 0; i < 10; i++) c.fillRect((i * 47 + 9) % s2, (i * 17 + 5) % s2, 3, 3);
+    } else if (!lavaW) {
       c.fillStyle = '#5bbf47'; c.fillRect(0, 0, s2, s2);
       c.fillStyle = '#4fae3e'; for (let i = 0; i < 18; i++) c.fillRect((i * 29) % s2, (i * 41) % s2, 4, 4);
       c.fillStyle = '#72d35a'; for (let i = 0; i < 10; i++) c.fillRect((i * 47 + 9) % s2, (i * 17 + 5) % s2, 3, 3);
@@ -2831,13 +2987,13 @@ function buildMap() {
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; g.add(ground);
   // río (agua o lava) con orillas
   const RX = st.river;
-  const river = new T.Mesh(new T.PlaneGeometry(2.4, 44), lavaW ? MAT.lava :
+  const river = new T.Mesh(new T.PlaneGeometry(2.4, 44), lavaW ? MAT.lava : skyW ? new T.MeshStandardMaterial({ color: 0x39e6ff, roughness: 0.2, emissive: 0x1aa8d8, emissiveIntensity: 0.9 }) :
     new T.MeshStandardMaterial({ color: 0x2f8de0, roughness: 0.15, metalness: 0.2, emissive: 0x0a3a70, emissiveIntensity: 0.4 }));
   river.rotation.x = -Math.PI / 2; river.position.set(RX, 0.03, 0); g.add(river);
-  const shore = new T.MeshStandardMaterial({ color: lavaW ? 0x1a1214 : 0xe0c98a, roughness: 0.9 });
+  const shore = new T.MeshStandardMaterial({ color: lavaW ? 0x1a1214 : skyW ? 0x2a3550 : 0xe0c98a, roughness: 0.9 });
   [-1.35, 1.35].forEach(dx => { const sh = new T.Mesh(new T.BoxGeometry(0.35, 0.08, 44), shore); sh.position.set(RX + dx, 0.04, 0); g.add(sh); });
   // caminos
-  const sand = new T.MeshStandardMaterial({ color: lavaW ? 0x8a7a70 : 0xead49b, roughness: 0.9 });
+  const sand = new T.MeshStandardMaterial({ color: lavaW ? 0x8a7a70 : skyW ? 0x5f86c8 : 0xead49b, roughness: 0.9 });
   const stud = new T.MeshStandardMaterial({ color: 0xf5b800, roughness: 0.5, metalness: 0.3 });
   for (let i = 0; i < MAPN.length - 1; i++) {
     const [ax, az] = MAPN[i].p, [bx, bz] = MAPN[i + 1].p;
@@ -2850,7 +3006,7 @@ function buildMap() {
     }
   }
   // puente
-  const wood = new T.MeshStandardMaterial({ color: lavaW ? 0x6d6a74 : 0xb06a2c, roughness: 0.8 });
+  const wood = new T.MeshStandardMaterial({ color: lavaW ? 0x6d6a74 : skyW ? 0x8a96b8 : 0xb06a2c, roughness: 0.8, metalness: skyW ? 0.4 : 0 });
   const BZ = st.bridgeZ;
   const bridge = new T.Mesh(new T.BoxGeometry(3.4, 0.18, 1.5), wood); bridge.position.set(RX, 0.14, BZ); bridge.castShadow = bridge.receiveShadow = true; g.add(bridge);
   [-0.75, 0.75].forEach(dz => { const r = new T.Mesh(new T.BoxGeometry(3.4, 0.1, 0.1), wood); r.position.set(RX, 0.5, BZ + dz); g.add(r);
@@ -2862,7 +3018,7 @@ function buildMap() {
     const [x, z] = n.p;
     if (n.pipe) { const pp = makePipe(); pp.position.set(x, 0, z); g.add(pp); specials.push(pp.position); return; }
     if (i === 0) return;
-    const side = new T.MeshStandardMaterial({ color: lavaW ? 0x3a0c08 : 0x0b1a3a, roughness: 0.6 });
+    const side = new T.MeshStandardMaterial({ color: lavaW ? 0x3a0c08 : skyW ? 0x2a1a5a : 0x0b1a3a, roughness: 0.6 });
     const top = new T.MeshStandardMaterial({ roughness: 0.5 });
     const m = new T.Mesh(new T.BoxGeometry(1.5, 0.35, 1.5), [side, side, top, side, side, side]);
     m.position.set(x, 0.2, z); m.castShadow = m.receiveShadow = true; g.add(m);
@@ -2876,7 +3032,7 @@ function buildMap() {
   }
   const ci = MAPN.findIndex(n => n.castle);
   const castle = makeBugCastle(); castle.position.set(MAPN[ci].p[0] + 0.2, 0, MAPN[ci].p[1] - 2.6);
-  if (lavaW) { castle.scale.setScalar(1.25); castle.traverse(o => { if (o.isMesh && o.material.color) { o.material = o.material.clone(); o.material.color.multiply(new T.Color(0.75, 0.5, 0.5)); } }); }
+  if (lavaW || skyW) { const tint = skyW ? new T.Color(0.6, 0.55, 1.1) : new T.Color(0.75, 0.5, 0.5); castle.scale.setScalar(skyW ? 1.4 : 1.25); castle.traverse(o => { if (o.isMesh && o.material.color) { o.material = o.material.clone(); o.material.color.multiply(tint); } }); }
   g.add(castle); specials.push(castle.position);
   if (lavaW) {   // barco junto al 2-2 en una laguna
     const [sx, sz] = MAPN[2].p;
@@ -2893,7 +3049,7 @@ function buildMap() {
   });
   const blocked = (x, z, r) => nearPath(x, z, r) || Math.abs(x - RX) < 1.8 + r * 0.3 || specials.some(q => Math.hypot(x - q.x, z - q.z) < 3);
   let seed = 11 + game.world * 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const aulaSpots = lavaW ? [] : [[-5, -3.5], [1.5, 4.5], [11.5, 3.2], [-9, -4]];
+  const aulaSpots = lavaW || skyW ? [] : [[-5, -3.5], [1.5, 4.5], [11.5, 3.2], [-9, -4]];
   aulaSpots.forEach(([x, z]) => { const a2 = makeAula(); a2.position.set(x, 0, z); a2.rotation.y = (rnd() - 0.5) * 0.4; g.add(a2); });
   const rockMat = new T.MeshStandardMaterial({ color: lavaW ? 0x2a2224 : 0xa08a70, roughness: 0.9 });
   let placed = 0, tries = 0;
@@ -2901,7 +3057,12 @@ function buildMap() {
     const x = -24 + rnd() * 46, z = -13 + rnd() * 24;
     if (blocked(x, z, 1.4) || aulaSpots.some(([ax, az]) => Math.hypot(x - ax, z - az) < 2.3)) continue;
     const r = rnd(); let o;
-    if (lavaW) {
+    if (skyW) {
+      if (r < 0.45) o = makeCloudPuff(0.6 + rnd() * 0.7);
+      else if (r < 0.65) o = makeServer(1.2 + rnd() * 1.4);
+      else if (r < 0.75) o = makeAntenna();
+      else { o = new T.Mesh(new T.OctahedronGeometry(0.25 + rnd() * 0.2), new T.MeshStandardMaterial({ color: 0x39e6ff, emissive: 0x1aa8d8, emissiveIntensity: 0.8 })); o.position.y = 0.6; }
+    } else if (lavaW) {
       if (r < 0.3) o = makeDeadTree(); else if (r < 0.42) o = makeVolcanoCone(1 + rnd() * 1.4);
       else if (r < 0.55) { o = new T.Mesh(new T.CircleGeometry(0.5 + rnd() * 0.6, 16), MAT.lava); o.rotation.x = -Math.PI / 2; o.position.y = 0.03; }
       else { o = new T.Mesh(new T.DodecahedronGeometry(0.35 + rnd() * 0.4), rockMat); o.position.y = 0.2; o.castShadow = true; }
@@ -2911,6 +3072,25 @@ function buildMap() {
     }
     o.position.x = x; o.position.z = z; if (!o.isMesh || o.geometry.type !== 'CircleGeometry') o.rotation.y = rnd() * 6.28; g.add(o); placed++;
   }
+}
+function makeCloudPuff(sz) {
+  const g = new T.Group(), m = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
+  [[0, 0.35, 0.55], [-0.5, 0.25, 0.4], [0.5, 0.25, 0.42], [0.15, 0.6, 0.38]].forEach(([x, y, r]) => { const b = new T.Mesh(new T.SphereGeometry(r * sz, 14, 10), m); b.position.set(x * sz, y * sz, 0); b.castShadow = true; g.add(b); });
+  return g;
+}
+function makeServer(h) {
+  const g = new T.Group();
+  const box = new T.Mesh(new T.BoxGeometry(0.9, h, 0.9), new T.MeshStandardMaterial({ color: 0x1e2740, roughness: 0.5, metalness: 0.5 })); box.position.y = h / 2; box.castShadow = true; g.add(box);
+  const led = new T.MeshStandardMaterial({ color: 0x39e6ff, emissive: 0x39e6ff, emissiveIntensity: 1 });
+  for (let y = 0.3; y < h - 0.1; y += 0.3) { const l = new T.Mesh(new T.BoxGeometry(0.5, 0.05, 0.02), led); l.position.set(0, y, 0.46); g.add(l); }
+  return g;
+}
+function makeAntenna() {
+  const g = new T.Group(), met = new T.MeshStandardMaterial({ color: 0xb8c4dc, metalness: 0.7, roughness: 0.3 });
+  const pole = new T.Mesh(new T.CylinderGeometry(0.05, 0.08, 2.2, 8), met); pole.position.y = 1.1; g.add(pole);
+  const dish = new T.Mesh(new T.SphereGeometry(0.45, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.4), met); dish.position.y = 1.8; dish.rotation.x = 2.2; g.add(dish);
+  const tip = new T.Mesh(new T.SphereGeometry(0.08, 8, 6), new T.MeshStandardMaterial({ color: 0xff2a55, emissive: 0xff2a55 })); tip.position.y = 2.25; g.add(tip);
+  return g;
 }
 function refreshPanels() {
   for (let i = 1; i < MAPN.length; i++) {
@@ -2980,7 +3160,7 @@ function mapEnter() {
     SFX.shrink();
     transition(() => {
       const to = node.to, pg = game.progress;
-      game.world = to; pg.world = to; pg.node[to] = to === 1 ? 0 : WORLDS[0].nodes.length - 1; saveProgress();
+      pg.node[to] = pipeNodeIn(to, game.world); game.world = to; pg.world = to; saveProgress();
       showMap({ banner: true });
     });
     return;
@@ -3047,7 +3227,7 @@ Promise.all(enemyEntries.map(name =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel,
+  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
     remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName, cos: r.cos || '' })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
