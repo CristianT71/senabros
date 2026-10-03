@@ -35,8 +35,11 @@ function friendly(err) {
   if (m.includes('could not find') || m.includes('does not exist')) return 'El servidor aún no está listo (faltan las tablas)';
   return err && err.message ? err.message : 'Ocurrió un error';
 }
+// diferencia entre el reloj del servidor y el del dispositivo (si el celular tiene la hora mal, igual funciona)
+let clockSkew = 0;
+const isOnline = iso => !!iso && (Date.now() + clockSkew - new Date(iso).getTime()) / 1000 < 150;
 const ago = iso => {
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  const s = (Date.now() + clockSkew - new Date(iso).getTime()) / 1000;
   if (s < 150) return { on: true, text: 'conectado' };
   const m = s / 60; return { on: false, text: m < 60 ? `hace ${Math.round(m)} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d` };
 };
@@ -69,7 +72,7 @@ async function loadProfile() {
     if (state.profile && state.screen === 'auth') showScreen('none');
     if (!state.profile && state.screen !== 'code') showScreen('auth');
     render();
-    if (state.profile) { await syncDown(); await Promise.all([loadFriends(), loadChallenges(), loadRecoveryStatus()]); db.rpc('touch_presence'); }
+    if (state.profile) { await syncDown(); await touchPresence(); await Promise.all([loadFriends(), loadChallenges(), loadRecoveryStatus()]); }
   } finally { loadingProfile = false; }
 }
 db.auth.onAuthStateChange((ev) => {
@@ -82,7 +85,13 @@ db.auth.onAuthStateChange((ev) => {
     showScreen('auth'); render();
   }
 });
-setInterval(() => { if (state.profile) { db.rpc('touch_presence'); loadFriends(); loadChallenges(); } }, 45000);
+async function touchPresence() {
+  const t0 = Date.now(), { data, error } = await db.rpc('touch_presence');
+  if (!error && data) clockSkew = new Date(data).getTime() - (t0 + Date.now()) / 2;
+}
+setInterval(() => { if (state.profile) { touchPresence(); loadFriends(); loadChallenges(); } }, 45000);
+// al volver a la pestaña (el navegador frena los temporizadores en segundo plano)
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state.profile) { touchPresence(); loadFriends(); } });
 
 // ---------- progreso en la nube ----------
 // Une lo local con lo de la nube sin perder nada: lo mejor de cada lado.
@@ -133,6 +142,7 @@ async function loadFriends() {
   state.incoming = data.filter(f => f.status === 'pending' && f.addressee_id === me).map(f => ({ fid: f.id, ...f.requester }));
   state.outgoing = data.filter(f => f.status === 'pending' && f.requester_id === me).map(f => ({ fid: f.id, ...f.addressee }));
   renderFriends(); renderChallengeForm(); updateBadges();
+  window.dispatchEvent(new Event('sena-friends'));
 }
 async function addFriend(id) {
   const { error } = await db.from('friendships').insert({ requester_id: state.user.id, addressee_id: id });
@@ -400,6 +410,7 @@ window.SenaOnline = {
   db,
   openAuth() { showScreen('auth'); },
   refreshFriends: () => loadFriends(),
+  isOnline,
   submitChallenge,
   openChallenges() { openProfile('challenges'); },
 };

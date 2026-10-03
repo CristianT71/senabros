@@ -58,14 +58,16 @@ function renderRoom() {
     const badges = el('div', { class: 'sbadges' });
     if (i === 0) badges.append(el('span', { class: 'host' }, 'Anfitrión'));
     if (p.uid === meId) badges.append(el('span', { class: 'you' }, 'Tú'));
-    slots.push(el('div', { class: 'slot' + (p.uid === meId ? ' me' : '') }, el('div', { class: 'sframe' }, img), badges,
-      el('b', {}, p.name), el('small', {}, charLabel(p.char) + (p.st === 'play' ? ' - en el nivel' : ''))));
+    slots.push(el('div', { class: 'slot' + (p.uid === meId ? ' mine' : '') }, badges, el('div', { class: 'sframe' }, img),
+      el('b', {}, p.name), p.st === 'play' ? el('small', { class: 'ingame' }, 'En el nivel') : el('small', {}, charLabel(p.char))));
   }
   $('mpSlots').replaceChildren(...slots);
+  $('mpCountLbl').textContent = st.players.length + ' de ' + MAX;
   $('mpHostBox').hidden = !host; $('mpWaitBox').hidden = host;
   const hostMode = (st.players[0] && st.players[0].mode) || 'coop';
   if (!host) st.mode = hostMode;
-  document.querySelectorAll('#mpHostBox .modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === st.mode));
+  document.querySelectorAll('#mpRoom .modes button').forEach(b => { b.classList.toggle('on', b.dataset.mode === st.mode); b.disabled = !host; });
+  $('mpModeWho').textContent = host ? 'Tú eliges el modo' + (modeOf(st.mode).arena ? '' : ' y el nivel') : 'Lo elige el anfitrión';
   $('mpLevelRow').hidden = !!modeOf(st.mode).arena;
   $('mpModeLbl').hidden = host; $('mpModeLbl').textContent = 'Modo: ' + modeOf(hostMode).desc;
   const playing = st.players.some(p => p.st === 'play');
@@ -81,9 +83,11 @@ function renderRoom() {
 function renderFriends() {
   const box = $('mpFriends'); if (!box) return;
   const fr = SenaOnline.friends || [], inRoom = new Set(st.players.map(p => p.uid));
+  const nOn = fr.filter(f => SenaOnline.isOnline(f.last_seen)).length; $('friendsOn').textContent = nOn ? '(' + nOn + ')' : '';
+  fr.sort((a, b) => SenaOnline.isOnline(b.last_seen) - SenaOnline.isOnline(a.last_seen));
   if (!fr.length) return box.replaceChildren(el('div', { class: 'pempty' }, 'Agrega amigos desde tu perfil para invitarlos.'));
   box.replaceChildren(...fr.map(f => {
-    const on = (Date.now() - new Date(f.last_seen).getTime()) / 1000 < 150;
+    const on = SenaOnline.isOnline(f.last_seen);
     const action = inRoom.has(f.id) ? el('small', {}, 'en la sala') : el('button', { class: 'mini ok', onclick: e => invite(f, e.target) }, 'Invitar');
     return el('div', { class: 'prow' }, el('div', { class: 'pdot' + (on ? ' on' : '') }), el('div', { class: 'pinfo' }, el('b', {}, f.username), el('small', {}, on ? 'conectado' : 'desconectado')), el('div', { class: 'pact' }, action));
   }));
@@ -266,6 +270,7 @@ function pushLevelLog(m) {
 function addChat(m) {
   st.chatLog.push(m); if (st.chatLog.length > 40) st.chatLog.shift();
   renderChatLog();
+  if ($('sideChatBox').hidden) $('chatDot').hidden = false;
   if (st.inLevel) { pushLevelLog(m); SENA_MP.chat(m.u, m.k, m.v); }
 }
 function receiveChat(m) {
@@ -298,7 +303,16 @@ $('cpForm').addEventListener('submit', e => { e.preventDefault(); sendChat('t', 
 $('cpInput').addEventListener('keydown', e => { if (e.key === 'Escape') { $('chatPanel').hidden = true; $('cpInput').blur(); } });
 $('lcForm').addEventListener('submit', e => { e.preventDefault(); sendChat('t', $('lcInput').value); $('lcInput').value = ''; });
 $('chatBtn').onclick = openChat;
-document.querySelectorAll('#mpHostBox .modes button').forEach(b => b.onclick = () => { st.mode = b.dataset.mode; track('lobby'); renderRoom(); });
+document.querySelectorAll('#mpRoom .modes button').forEach(b => b.onclick = () => { if (!isHost()) return; st.mode = b.dataset.mode; track('lobby'); renderRoom(); });
+// pestañas Chat / Amigos de la sala
+function sideTab(name) {
+  $('sideChat').classList.toggle('on', name === 'chat'); $('sideFriends').classList.toggle('on', name === 'friends');
+  $('sideChatBox').hidden = name !== 'chat'; $('sideFriendsBox').hidden = name !== 'friends';
+  if (name === 'chat') $('chatDot').hidden = true;
+}
+$('sideChat').onclick = () => sideTab('chat');
+$('sideFriends').onclick = () => { sideTab('friends'); if (SenaOnline.refreshFriends) SenaOnline.refreshFriends(); };
+window.addEventListener('sena-friends', () => { if ($('mpScreen').classList.contains('show')) renderFriends(); });
 
 // ---------- invitaciones ----------
 async function invite(f, b) {
