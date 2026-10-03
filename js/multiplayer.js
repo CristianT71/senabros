@@ -21,7 +21,7 @@ const db = () => SenaOnline.db;
 const me = () => SenaOnline.user;
 const el = (tag, props = {}, ...kids) => {
   const e = document.createElement(tag);
-  for (const k in props) k === 'class' ? e.className = props[k] : k === 'onclick' ? e.onclick = props[k] : e.setAttribute(k, props[k]);
+  for (const k in props) k === 'class' ? e.className = props[k] : k === 'onclick' ? e.onclick = props[k] : k === 'html' ? e.innerHTML = props[k] : e.setAttribute(k, props[k]);
   kids.flat().forEach(c => e.append(c)); return e;
 };
 const CHAR_LABEL = { Intructor: 'Instructor' };
@@ -37,6 +37,7 @@ function openScreen() {
   setMsg(''); render();
   if (st.ch) track(st.inLevel ? 'play' : 'lobby');
   if (SenaOnline.refreshFriends) SenaOnline.refreshFriends().then(renderFriends);
+  if (SenaOnline.champions && me()) SenaOnline.champions().then(rows => { st.champs = new Set(rows.map(r => r.user_id)); if (st.ch) renderRoom(); });
 }
 function closeScreen() { $('mpScreen').classList.remove('show'); document.body.classList.remove('acct-open'); }
 function render() {
@@ -59,7 +60,7 @@ function renderRoom() {
     if (i === 0) badges.append(el('span', { class: 'host' }, 'Anfitrión'));
     if (p.uid === meId) badges.append(el('span', { class: 'you' }, 'Tú'));
     slots.push(el('div', { class: 'slot' + (p.uid === meId ? ' mine' : '') }, badges, el('div', { class: 'sframe' }, img),
-      el('b', {}, p.name), p.st === 'play' ? el('small', { class: 'ingame' }, 'En el nivel') : el('small', {}, charLabel(p.char))));
+      el('b', {}, (st.champs && st.champs.has(p.uid)) ? el('span', { class: 'champ', title: 'Campeón de la semana', html: SENA_ICON('crown', 16) }) : '', p.name), p.st === 'play' ? el('small', { class: 'ingame' }, 'En el nivel') : el('small', {}, charLabel(p.char))));
   }
   $('mpSlots').replaceChildren(...slots);
   $('mpCountLbl').textContent = st.players.length + ' de ' + MAX;
@@ -134,14 +135,14 @@ function subscribe(ch) {
     ch.subscribe(s => { if (s === 'SUBSCRIBED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' || s === 'CLOSED') { clearTimeout(t); res(s); } });
   });
 }
-async function track(state) { if (st.ch && me()) await st.ch.track({ name: me().username, char: SENA_MP.char(), joined: st.joinedAt, st: state, mode: st.mode }); }
+async function track(state) { if (st.ch && me()) await st.ch.track({ name: me().username, char: SENA_MP.char(), cos: SENA_MP.cos(), joined: st.joinedAt, st: state, mode: st.mode }); }
 function onSync() {
   if (!st.ch) return;
   const ps = st.ch.presenceState();
   st.players = Object.entries(ps).map(([uid, arr]) => ({ uid, ...arr[0] })).sort((a, b) => a.joined - b.joined || (a.uid < b.uid ? -1 : 1));
   if (st.inLevel) {   // dibujar solo a quienes están en el nivel
     const meId = me() && me().id;
-    st.players.forEach(p => { if (p.uid !== meId) { if (p.st === 'play') SENA_MP.join(p.uid, p.name, p.char); else SENA_MP.remove(p.uid); } });
+    st.players.forEach(p => { if (p.uid !== meId) { if (p.st === 'play') SENA_MP.join(p.uid, p.name, p.char, p.cos); else SENA_MP.remove(p.uid); } });
   }
   if ($('mpScreen').classList.contains('show')) renderRoom(); else render();
 }
@@ -217,7 +218,7 @@ function enterLevel(p) {
   window.SENA_NET = { send: (type, payload) => { if (st.ch) st.ch.send({ type: 'broadcast', event: 'ev', payload: { u: me().id, n: me().username, type, p: payload } }); } };
   st.chatLog = st.chatLog.slice(-3); renderChatLog();
   const order = (p.players || []).map(q => q.uid).sort();
-  SENA_MP.start({ mode: p.mode, world: p.world, level: p.level, me: me().id, order, players: st.players.filter(q => q.uid !== me().id).map(q => ({ uid: q.uid, name: q.name, char: q.char })) });
+  SENA_MP.start({ mode: p.mode, world: p.world, level: p.level, me: me().id, order, players: st.players.filter(q => q.uid !== me().id).map(q => ({ uid: q.uid, name: q.name, char: q.char, cos: q.cos })) });
   track('play');
   clearInterval(st.timer);
   let last = '', lastT = 0;

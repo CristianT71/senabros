@@ -79,7 +79,7 @@ db.auth.onAuthStateChange((ev) => {
   if (ev === 'SIGNED_IN' && !state.profile && !loadingProfile) loadProfile();
   if (ev === 'SIGNED_OUT') {
     state.user = state.profile = null; state.friends = state.incoming = state.outgoing = state.challenges = []; state.guest = false;
-    for (const k of ['senabros_progress', 'senabros_powers', 'senabros_best']) { try { localStorage.removeItem(k); } catch (_) {} }   // el progreso queda en la nube; no se mezcla con la próxima cuenta
+    for (const k of ['senabros_progress', 'senabros_powers', 'senabros_best', 'senabros_stats', 'senabros_wardrobe']) { try { localStorage.removeItem(k); } catch (_) {} }   // el progreso queda en la nube; no se mezcla con la próxima cuenta
     if (window.SENA_SET_GUEST) SENA_SET_GUEST(false);
     if (window.SENA_RELOAD) SENA_RELOAD();
     showScreen('auth'); render();
@@ -111,21 +111,26 @@ function mergePowers(a, b) {
   return out;
 }
 const readLocal = key => { try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) { return {}; } };
+// estadísticas: contadores que solo suben, se queda el mayor de cada lado
+function mergeStats(a, b) { const out = {}, A = a || {}, B = b || {}; for (const k of new Set([...Object.keys(A), ...Object.keys(B)])) out[k] = Math.max(A[k] | 0, B[k] | 0); return out; }
 let saveTimer = 0, syncing = false;
 async function syncDown() {
   syncing = true;
   try {
-    const { data, error } = await db.from('game_progress').select('progress,powers,best_score').eq('user_id', state.user.id).maybeSingle();
+    const { data, error } = await db.from('game_progress').select('progress,powers,best_score,stats,wardrobe').eq('user_id', state.user.id).maybeSingle();
     if (error || !data) return;
     const progress = mergeProgress(readLocal('senabros_progress'), data.progress), powers = mergePowers(readLocal('senabros_powers'), data.powers);
+    const stats = mergeStats(readLocal('senabros_stats'), data.stats);
     localStorage.setItem('senabros_progress', JSON.stringify(progress)); localStorage.setItem('senabros_powers', JSON.stringify(powers));
+    localStorage.setItem('senabros_stats', JSON.stringify(stats)); localStorage.setItem('senabros_wardrobe', JSON.stringify(data.wardrobe || {}));
     if (window.SENA_RELOAD) window.SENA_RELOAD();
-    await db.from('game_progress').update({ progress, powers, updated_at: new Date().toISOString() }).eq('user_id', state.user.id);
+    await db.from('game_progress').update({ progress, powers, stats, updated_at: new Date().toISOString() }).eq('user_id', state.user.id);
   } finally { syncing = false; }
 }
 async function pushNow() {
   if (!state.profile || syncing) return;
-  const patch = { progress: readLocal('senabros_progress'), powers: readLocal('senabros_powers'), updated_at: new Date().toISOString() };
+  if (window.SENA_SHOP) SENA_SHOP.flush();
+  const patch = { progress: readLocal('senabros_progress'), powers: readLocal('senabros_powers'), stats: readLocal('senabros_stats'), updated_at: new Date().toISOString() };
   const best = window.SENA_BEST_SCORE ? window.SENA_BEST_SCORE() : 0;
   if (best > 0) patch.best_score = best;
   await db.from('game_progress').update(patch).eq('user_id', state.user.id);
@@ -410,6 +415,23 @@ window.SenaOnline = {
   db,
   openAuth() { showScreen('auth'); },
   refreshFriends: () => loadFriends(),
+  // ranking semanal, tienda y campeones (js/premios.js)
+  async submitScore(board, val) { if (!state.profile) return; const { error } = await db.rpc('submit_score', { board_name: board, val: Math.round(val) }); if (error) console.warn('ranking:', error.message); },
+  async ranking(board, weeksAgo = 0) { const { data, error } = await db.rpc('get_ranking', { board_name: board, weeks_ago: weeksAgo }); return error ? { error: friendly(error) } : { rows: data || [] }; },
+  async champions() { const { data } = await db.rpc('weekly_champions'); return data || []; },
+  async buy(item) {
+    if (!state.profile) return { error: 'Inicia sesión para comprar' };
+    clearTimeout(saveTimer); await pushNow();   // primero sube las monedas ganadas
+    const { data, error } = await db.rpc('buy_item', { item });
+    if (error) return { error: friendly(error) };
+    localStorage.setItem('senabros_wardrobe', JSON.stringify(data)); SENA_SHOP.setWardrobe(data); return { ok: true };
+  },
+  async equip(eq) {
+    if (!state.profile) return { error: 'Inicia sesión' };
+    const { data, error } = await db.rpc('equip_items', { eq });
+    if (error) return { error: friendly(error) };
+    localStorage.setItem('senabros_wardrobe', JSON.stringify(data)); SENA_SHOP.setWardrobe(data); return { ok: true };
+  },
   isOnline,
   submitChallenge,
   openChallenges() { openProfile('challenges'); },

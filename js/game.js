@@ -820,6 +820,7 @@ function updateBoss(e, dt) {
 }
 function bossDefeated() {
   const L = levelSpec(game.level);
+  if (!netMute) addStat('bossKills');
   if (L.bossWall == null) { bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8; toast('¡BUG REY DERROTADO!', 2600); return; }
   bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8;
   toast('¡BUG REY DERROTADO!', 2600);
@@ -973,7 +974,7 @@ function net(type, payload) {
   window.SENA_NET.send(type, payload);
 }
 function addScore(n) { if (netMute) return; game.score += n; }
-function addCoinCount() { if (netMute) return; game.coins++; addScore(200); addEnergy(1); missionProgress('coins'); SFX.coin(); if (game.coins % 50 === 0) { game.lives++; SFX.oneup(); toast('1-UP!'); } }
+function addCoinCount() { if (netMute) return; game.coins++; addStat('coinsEarned'); addScore(200); addEnergy(1); missionProgress('coins'); SFX.coin(); if (game.coins % 50 === 0) { game.lives++; SFX.oneup(); toast('1-UP!'); } }
 
 function resetPlayer(x) {
   Object.assign(player, { x, y: 2, vx: 0, vy: 0, facing: 1, grounded: false, crouch: false, pound: false, punchT: 0, landT: 0, dead: false, deadT: 0, invT: 1.2, rot: 0,
@@ -1007,9 +1008,11 @@ function transition(fn) {
   }, 460);
 }
 function completeLevel() {
-  if (game.mp) { if (!game.mp.sent) { game.mp.sent = true; if (window.SenaMP) SenaMP.levelDone(mpStats()); } return; }
+  if (game.mp) { if (!game.mp.sent) { game.mp.sent = true; mpFinish(); } return; }
   if (game.challenge) { finishChallenge(); return; }
   recordBest();
+  { const before = achUnlocked(); addStat('levels'); if (!game.hurt) addStat('flawless');
+    submitScore('nivel:' + (game.world + 1) + '-' + (game.level + 1), game.score); setTimeout(() => achCheck(before), 50); }
   const w = game.world, n = game.level + 1, pg = game.progress;
   missionProgress('levels'); if (!game.hurt) missionProgress('flawless'); if (game.winTime >= 150) missionProgress('fast');
   if (n > pg.done[w]) pg.done[w] = n;
@@ -1030,16 +1033,16 @@ function remotePlay(r, name, speed = 1) {
   if (r.cur && r.cur !== a) a.crossFadeFrom(r.cur, 0.12, false);
   a.play(); r.cur = a; r.curName = name;
 }
-async function ensureRemote(uid, name, file) {
+async function ensureRemote(uid, name, file, cos) {
   let r = remotes.get(uid);
-  if (r && r.file === file) return r;
+  if (r && r.file === file) { if (cos !== undefined && r.cos !== cos) { r.cos = cos; r.eq = parseEq(cos); if (r.model) dressModel(r.model, r.eq); } return r; }
   if (r) removeRemote(uid);
-  r = { uid, name, file, model: null, x: 3, y: 2, tx: 3, ty: 2, vx: 0, vy: 0, facing: 1, rot: 0, tilt: 0, sc: 1, anim: 'M_Idle', speed: 1, last: 0, dead: false, has: false };
+  r = { uid, name, file, cos, eq: parseEq(cos), model: null, x: 3, y: 2, tx: 3, ty: 2, vx: 0, vy: 0, facing: 1, rot: 0, tilt: 0, sc: 1, anim: 'M_Idle', speed: 1, last: 0, dead: false, has: false };
   remotes.set(uid, r);
   try {
     const g = await getChar(file);
     if (remotes.get(uid) !== r) return r;   // se fue mientras cargaba
-    const m = T.SkeletonUtils.clone(g.scene);
+    const m = T.SkeletonUtils.clone(g.scene); dressModel(m, r.eq);
     m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
     r.model = m; r.mixer = new T.AnimationMixer(m); r.actions = {}; r.cur = null; r.curName = '';
     g.animations.filter(c => c.name.startsWith('M_')).forEach(c => { r.actions[c.name] = r.mixer.clipAction(c); });
@@ -1137,7 +1140,7 @@ function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}]
   game.mp = { me: opts.me, mode, order: [], finished: false, sent: false, t0: performance.now(), raceLeft: 0, names: {},
     ids: (opts.order || []).slice(), battleLeft: 120, wave: 0, waveBreak: 2.5, coinT: 1, bcoins: new Map(), nextCoin: 0, over: false };
   opts.players.forEach(q => { game.mp.names[q.uid] = q.name; });
-  opts.players.filter(q => q.uid !== opts.me).forEach(q => ensureRemote(q.uid, q.name, q.char));
+  opts.players.filter(q => q.uid !== opts.me).forEach(q => ensureRemote(q.uid, q.name, q.char, q.cos));
   Object.assign(game, { score: 0, coins: 0, lives: 3, energy: 0, challenge: null });
   game.world = opts.world - 1; MAPN = WORLDS[game.world].nodes;
   if (mode === 'battle' || mode === 'survival') { game.arena = arenaSpec(mode); startLevel(-1); }
@@ -1162,7 +1165,8 @@ window.SENA_MP = {
   state: localNetState,
   apply: applyRemoteState,
   event: applyRemoteEvent,
-  join: (uid, name, char) => { if (game.mp) ensureRemote(uid, name, char); },
+  join: (uid, name, char, cos) => { if (game.mp) ensureRemote(uid, name, char, cos); },
+  cos: () => eqString(persist ? wardrobe.eq : {}),
   remove: removeRemote,
   active: () => !!game.mp,
   backToMenu: () => { stopMP(); showTitle(); },
@@ -1328,7 +1332,7 @@ function checkRevives(dt) {   // tocar a un compañero fantasma lo revive
   if (reviveCd > 0 || p.dead || p.ghost || game.state !== 'play') return;
   for (const r of teammates()) {
     if (r.ghost && Math.abs(r.x - p.x) < 1.1 && Math.abs(r.y + 0.4 - (p.y + p.h / 2)) < 1.6) {
-      net('revive', { u: r.uid }); reviveCd = 1.2;
+      net('revive', { u: r.uid }); reviveCd = 1.2; addStat('revives');
       burstColor(r.x, r.y + 1, 0x9af0ff, 30, 6); SFX.powerup(); toast('Reviviste a ' + r.name, 1500); addScore(500);
       break;
     }
@@ -1385,7 +1389,7 @@ function updateRaceHud(dt) {
   const m = game.mp;
   if (m.raceLeft > 0 && !m.finished) {
     m.raceLeft -= dt; raceTimer.textContent = 'La carrera termina en ' + Math.max(0, Math.ceil(m.raceLeft)) + ' s';
-    if (m.raceLeft <= 0) { raceTimer.hidden = true; toast('Se acabó el tiempo', 1800); if (!m.sent) { m.sent = true; if (window.SenaMP) SenaMP.levelDone(mpStats()); } }
+    if (m.raceLeft <= 0) { raceTimer.hidden = true; toast('Se acabó el tiempo', 1800); if (!m.sent) { m.sent = true; mpFinish(); } }
   }
   if (m.finished) raceTimer.hidden = true;
   if ((hudT -= dt) > 0) return; hudT = 0.25;
@@ -1460,11 +1464,11 @@ function updateBattle(dt) {
     c.m.rotation.y = tnow * 3; c.m.position.y = c.y + Math.sin(tnow * 3 + c.x) * 0.1;
     if (!p.ghost && !p.dead && Math.abs(c.x - p.x) < 0.7 && Math.abs(c.y - (p.y + 0.7)) < 1.0) {
       battleRemoveCoin(i); net('cgrab', { i });
-      game.coins += c.v; addScore(c.v * 100); SFX.coin(); if (c.v > 1) toast('+5 monedas', 900);
+      game.coins += c.v; addScore(c.v * 100); SFX.coin(); addStat('coinsEarned', c.v); if (c.v > 1) toast('+5 monedas', 900);
     }
   }
   updateScoreHud('coins', dt);
-  if (m.battleLeft <= 0 && !m.sent) { m.sent = true; raceTimer.textContent = 'Fin de la batalla'; toast('¡Tiempo!', 1600); SFX.win(); setTimeout(() => window.SenaMP && SenaMP.levelDone(mpStats()), 1200); }
+  if (m.battleLeft <= 0 && !m.sent) { m.sent = true; raceTimer.textContent = 'Fin de la batalla'; toast('¡Tiempo!', 1600); SFX.win(); setTimeout(mpFinish, 1200); }
 }
 // marcador en vivo (monedas en la batalla, bugs en supervivencia)
 function updateScoreHud(field, dt) {
@@ -1508,7 +1512,7 @@ function survivalStartWave(n, list) {
 function survivalOver() {
   const m = game.mp; if (!m || m.over) return;
   m.over = true; endGhost(); toast('Cayó el equipo en la oleada ' + m.wave, 2600); SFX.die();
-  if (!m.sent) { m.sent = true; setTimeout(() => window.SenaMP && SenaMP.levelDone(mpStats()), 1800); }
+  if (!m.sent) { m.sent = true; setTimeout(mpFinish, 1800); }
 }
 function updateSurvival(dt) {
   const m = game.mp; if (m.over) return;
@@ -1521,6 +1525,252 @@ function updateSurvival(dt) {
   }
   updateScoreHud('kills', dt);
 }
+
+
+// ================= Estadísticas, logros, ranking y ropa =================
+// stats: contadores que solo suben (se guardan en el navegador y en la nube). De ahí salen los logros.
+const STATS_KEY = 'senabros_stats', WARD_KEY = 'senabros_wardrobe';
+const readJSON = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || '') || d; } catch (_) { return d; } };
+let stats = readJSON(STATS_KEY, {});
+let wardrobe = readJSON(WARD_KEY, { owned: [], eq: {} });
+let statsTimer = 0;
+function saveStats() {
+  if (!persist) return;
+  clearTimeout(statsTimer);
+  statsTimer = setTimeout(() => { try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }, 800);
+}
+function addStat(k, n = 1) { if (!persist || !n) return; const before = achUnlocked(); stats[k] = (stats[k] | 0) + n; saveStats(); achCheck(before); }
+function maxStat(k, v) { if (!persist || (stats[k] | 0) >= v) return; const before = achUnlocked(); stats[k] = v | 0; saveStats(); achCheck(before); }
+
+const ACHIEVEMENTS = [
+  { id: 'primer_nivel', name: 'Primer día', desc: 'Completa tu primer nivel', icon: 'flag', stat: 'levels', goal: 1 },
+  { id: 'mundo1', name: 'Yamboró liberado', desc: 'Completa todos los niveles del Mundo 1', icon: 'map', get: () => game.progress.done[0], goal: 6 },
+  { id: 'mundo2', name: 'Volcán apagado', desc: 'Completa todos los niveles del Mundo 2', icon: 'flame', get: () => game.progress.done[1], goal: 5 },
+  { id: 'cazador', name: 'Cazador de bugs', desc: 'Elimina 100 bugs', icon: 'bug', stat: 'kills', goal: 100 },
+  { id: 'exterminador', name: 'Exterminador', desc: 'Elimina 1.000 bugs', icon: 'bug', stat: 'kills', goal: 1000 },
+  { id: 'ahorrador', name: 'Ahorrador', desc: 'Junta 500 monedas', icon: 'coin', stat: 'coinsEarned', goal: 500 },
+  { id: 'millonario', name: 'Millonario', desc: 'Junta 5.000 monedas', icon: 'coin', stat: 'coinsEarned', goal: 5000 },
+  { id: 'rey_caido', name: 'Rey caído', desc: 'Derrota al Bug Rey', icon: 'crown', stat: 'bossKills', goal: 1 },
+  { id: 'intocable', name: 'Intocable', desc: 'Completa un nivel sin recibir daño', icon: 'shield', stat: 'flawless', goal: 1 },
+  { id: 'poder_total', name: 'Poder total', desc: 'Desbloquea los 7 poderes', icon: 'bolt', get: () => Object.values(powerData).filter(d => d.unlocked).length, goal: 7 },
+  { id: 'velocista', name: 'Velocista', desc: 'Gana 5 carreras en línea', icon: 'flag', stat: 'raceWins', goal: 5 },
+  { id: 'manos_rapidas', name: 'Manos rápidas', desc: 'Gana 3 batallas de monedas', icon: 'coin', stat: 'battleWins', goal: 3 },
+  { id: 'sobreviviente', name: 'Sobreviviente', desc: 'Llega a la oleada 10 en Supervivencia', icon: 'shield', stat: 'survivalBest', goal: 10 },
+  { id: 'imparable', name: 'Imparable', desc: 'Llega a la oleada 20 en Supervivencia', icon: 'shield', stat: 'survivalBest', goal: 20 },
+  { id: 'companero', name: 'Buen compañero', desc: 'Revive a 10 compañeros', icon: 'heart', stat: 'revives', goal: 10 },
+  { id: 'con_estilo', name: 'Con estilo', desc: 'Compra tu primera prenda en la tienda', icon: 'shirt', get: () => wardrobe.owned.length, goal: 1 },
+  { id: 'campeon', name: 'Campeón de la semana', desc: 'Queda primero en un ranking semanal', icon: 'trophy', stat: 'champion', goal: 1 },
+];
+const achValue = a => Math.min(a.goal, a.get ? (a.get() | 0) : (stats[a.stat] | 0));
+const achUnlocked = () => new Set(ACHIEVEMENTS.filter(a => achValue(a) >= a.goal).map(a => a.id));
+function achCheck(before) {
+  if (!persist || !before) return;
+  ACHIEVEMENTS.filter(a => !before.has(a.id) && achValue(a) >= a.goal).forEach((a, i) => setTimeout(() => {
+    powerBanner({ icon: 'star', name: 'Logro: ' + a.name, color: 0xffd23f }); SFX.oneup();
+  }, i * 2200));
+}
+window.SENA_ACHIEVEMENTS = () => ACHIEVEMENTS.map(a => ({ id: a.id, name: a.name, desc: a.desc, icon: a.icon, goal: a.goal, value: achValue(a), done: achValue(a) >= a.goal }));
+window.SENA_STAT_MAX = (k, v) => maxStat(k, v);
+
+// ranking semanal: lo envía js/online.js si hay cuenta
+function submitScore(board, value) { if (persist && window.SenaOnline && SenaOnline.submitScore) SenaOnline.submitScore(board, value); }
+// al terminar una partida en línea: estadísticas y ranking según el modo
+function mpFinish() {
+  const m = game.mp, s = mpStats();
+  if (m.mode === 'race' && s.place === 1 && m.ids.length >= 2) { addStat('raceWins'); submitScore('carrera', 1); }
+  if (m.mode === 'battle') {
+    const best = Math.max(0, ...teammates().map(r => r.coins | 0));
+    if (teammates().length && game.coins > best) addStat('battleWins');
+    if (game.coins > 0) submitScore('batalla', game.coins);
+  }
+  if (m.mode === 'survival' && m.wave > 0) { maxStat('survivalBest', m.wave); submitScore('supervivencia', m.wave); }
+  if (window.SenaMP) SenaMP.levelDone(s);
+}
+
+// ---------- Tienda: ropa 3D que se ajusta a la cabeza y la espalda de cada instructor ----------
+const SHOP = [
+  { id: 'gorra', slot: 'cabeza', name: 'Gorra SENA', price: 150 },
+  { id: 'casco', slot: 'cabeza', name: 'Casco de obra', price: 300 },
+  { id: 'audifonos', slot: 'cabeza', name: 'Audífonos', price: 450 },
+  { id: 'vueltiao', slot: 'cabeza', name: 'Sombrero vueltiao', price: 800 },
+  { id: 'corona', slot: 'cabeza', name: 'Corona', price: 2000 },
+  { id: 'gafas_sol', slot: 'cara', name: 'Gafas de sol', price: 200 },
+  { id: 'gafas_dev', slot: 'cara', name: 'Gafas de programador', price: 250 },
+  { id: 'mochila', slot: 'espalda', name: 'Mochila', price: 350 },
+  { id: 'capa_roja', slot: 'espalda', name: 'Capa roja', price: 600 },
+  { id: 'capa_sena', slot: 'espalda', name: 'Capa SENA', price: 700 },
+  { id: 'estela_verde', slot: 'estela', name: 'Estela verde', price: 300 },
+  { id: 'estela_dorada', slot: 'estela', name: 'Estela dorada', price: 900 },
+  { id: 'estela_arcoiris', slot: 'estela', name: 'Estela arcoíris', price: 1500 },
+];
+const SLOTS = ['cabeza', 'cara', 'espalda', 'estela'];
+const shopItem = id => SHOP.find(i => i.id === id);
+const walletSpent = () => wardrobe.owned.reduce((n, id) => n + ((shopItem(id) || {}).price | 0), 0);
+const wallet = () => Math.max(0, (stats.coinsEarned | 0) - walletSpent());
+
+// Marco de un hueso: ejes "derecha/arriba/frente" del personaje vistos desde el hueso, y la caja de los vértices que mueve.
+// Se calcula con los datos de la piel (sirve aunque el .glb venga comprimido y cuantizado).
+function boneFrame(skin, names) {
+  const bones = skin.skeleton.bones, idx = names.map(n => bones.findIndex(b => b.name === n)).filter(i => i >= 0);
+  if (!idx.length) return null;
+  const main = idx[0], toLocal = new T.Matrix4().multiplyMatrices(skin.skeleton.boneInverses[main], skin.bindMatrix);
+  const up = new T.Vector3(0, 1, 0).transformDirection(toLocal), fwd = new T.Vector3(1, 0, 0).transformDirection(toLocal);
+  fwd.sub(up.clone().multiplyScalar(fwd.dot(up))).normalize();
+  const right = new T.Vector3().crossVectors(up, fwd).normalize();
+  const geo = skin.geometry, pos = geo.attributes.position, si = geo.attributes.skinIndex, sw = geo.attributes.skinWeight;
+  const scaleOf = a => !a.normalized ? 1 : a.array instanceof Int16Array ? 1 / 32767 : a.array instanceof Uint16Array ? 1 / 65535 : a.array instanceof Int8Array ? 1 / 127 : a.array instanceof Uint8Array ? 1 / 255 : 1;
+  const ps = scaleOf(pos), ws = scaleOf(sw), set = new Set(idx);
+  const min = new T.Vector3(Infinity, Infinity, Infinity), max = new T.Vector3(-Infinity, -Infinity, -Infinity), v = new T.Vector3(), c = new T.Vector3();
+  const comps = ['getX', 'getY', 'getZ', 'getW'];
+  for (let k = 0; k < pos.count; k++) {
+    let w = 0; for (let j = 0; j < 4; j++) if (set.has(si[comps[j]](k))) w += sw[comps[j]](k) * ws;
+    if (w < 0.5) continue;
+    v.set(pos.getX(k) * ps, pos.getY(k) * ps, pos.getZ(k) * ps).applyMatrix4(toLocal);
+    c.set(v.dot(right), v.dot(up), v.dot(fwd)); min.min(c); max.max(c);
+  }
+  if (!isFinite(min.x)) return null;
+  const q = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(right, up, fwd));
+  return { bone: bones[main], q, min, max, size: new T.Vector3().subVectors(max, min), center: new T.Vector3().addVectors(min, max).multiplyScalar(0.5) };
+}
+function rigFit(root) {
+  if (root.userData.fit) return root.userData.fit;
+  let skin = null; root.traverse(o => { if (o.isSkinnedMesh && !skin) skin = o; });
+  if (!skin) return null;
+  return (root.userData.fit = { head: boneFrame(skin, ['Head']), chest: boneFrame(skin, ['UpperChest', 'Chest']) });
+}
+const accMat = (color, o = {}) => new T.MeshStandardMaterial(Object.assign({ color, roughness: 0.55 }, o));
+const ACC_MATS = {};
+const am = (k, color, o) => ACC_MATS[k] || (ACC_MATS[k] = accMat(color, o));
+function vueltiaoTex() {
+  return ACC_MATS.vtex || (ACC_MATS.vtex = canvasTex((g, n) => {
+    g.fillStyle = '#efe3c2'; g.fillRect(0, 0, n, n);
+    g.fillStyle = '#1b1208'; for (let i = 0; i < 6; i++) g.fillRect(0, i * n / 6 + n / 24, n, n / 18);
+    for (let x = 0; x < n; x += n / 8) for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(x, i * n / 6 + n / 12); g.lineTo(x + n / 16, i * n / 6 + n / 7); g.lineTo(x + n / 8, i * n / 6 + n / 12); g.fill(); }
+  }));
+}
+// Construye una prenda en el marco del hueso (x = derecha, y = arriba, z = frente). f = caja de la cabeza o del pecho.
+function buildAcc(id, f) {
+  const g = new T.Group(), W = f.size.x, H = f.size.y, D = f.size.z, cx = f.center.x, cz = f.center.z, top = f.max.y, front = f.max.z, back = f.min.z;
+  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; g.add(m); return m; };
+  const R = Math.max(W, D) * 0.5;
+  if (id === 'gorra' || id === 'casco') {
+    const mat = id === 'gorra' ? am('gorra', 0x2f9e00) : am('casco', 0xffc21a, { roughness: 0.35, metalness: 0.1 });
+    const dome = add(new T.SphereGeometry(R * 1.04, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), mat, cx, top - R * 0.42, cz); dome.scale.y = 0.78;
+    if (id === 'gorra') {
+      const visor = add(new T.CylinderGeometry(R * 0.95, R * 0.95, R * 0.07, 24, 1, false, 0, Math.PI), am('gorra2', 0x1f6d00), cx, top - R * 0.42, cz + R * 0.35); visor.rotation.y = Math.PI / 2; visor.scale.x = 0.9;
+      add(new T.CircleGeometry(R * 0.2, 20), am('gorra3', 0xffffff), cx, top - R * 0.05, cz + R * 0.86, -0.5);
+      add(new T.SphereGeometry(R * 0.09, 10, 8), mat, cx, top + R * 0.37, cz);
+    } else {
+      add(new T.CylinderGeometry(R * 1.22, R * 1.22, R * 0.06, 28), mat, cx, top - R * 0.42, cz);
+      add(new T.BoxGeometry(R * 0.16, R * 0.2, R * 1.9), mat, cx, top + R * 0.33, cz);
+    }
+  } else if (id === 'audifonos') {
+    const band = add(new T.TorusGeometry(W * 0.56, R * 0.07, 10, 28, Math.PI), am('aud', 0x222831, { roughness: 0.4 }), cx, f.center.y + H * 0.02, cz);
+    band.scale.y = (top - f.center.y + R * 0.1) / (W * 0.56);
+    [-1, 1].forEach(sd => {
+      add(new T.CylinderGeometry(R * 0.32, R * 0.32, R * 0.22, 22), am('aud', 0x222831), cx + sd * W * 0.56, f.center.y, cz, 0, 0, Math.PI / 2);
+      add(new T.CylinderGeometry(R * 0.24, R * 0.24, R * 0.06, 22), am('aud2', 0x39d98a, { emissive: 0x39d98a, emissiveIntensity: 0.6 }), cx + sd * W * 0.68, f.center.y, cz, 0, 0, Math.PI / 2);
+    });
+  } else if (id === 'vueltiao') {
+    const tex = vueltiaoTex(), mat = new T.MeshStandardMaterial({ map: tex, roughness: 0.9, side: T.DoubleSide });
+    add(new T.CylinderGeometry(R * 2.0, R * 2.0, R * 0.05, 40), mat, cx, top - R * 0.32, cz);
+    add(new T.CylinderGeometry(R * 0.78, R * 0.98, R * 0.62, 32, 1, false), mat, cx, top - R * 0.02, cz);
+    add(new T.CylinderGeometry(R * 0.78, R * 0.78, R * 0.02, 32), am('vtop', 0x1b1208), cx, top + R * 0.3, cz);
+  } else if (id === 'corona') {
+    const gold = am('oro', 0xffc81a, { roughness: 0.25, metalness: 0.85, emissive: 0x5a3a00, emissiveIntensity: 0.35 });
+    add(new T.CylinderGeometry(R * 0.68, R * 0.72, R * 0.32, 28, 1, true), gold, cx, top + R * 0.02, cz).material.side = T.DoubleSide;
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; add(new T.ConeGeometry(R * 0.15, R * 0.4, 10), gold, cx + Math.sin(a) * R * 0.66, top + R * 0.36, cz + Math.cos(a) * R * 0.66); }
+    [0, Math.PI / 3, -Math.PI / 3].forEach((a, i) => add(new T.SphereGeometry(R * 0.08, 10, 8), am('gema' + i, [0xff2a55, 0x39d98a, 0x3a8dff][i], { roughness: 0.15, metalness: 0.3 }), cx + Math.sin(a) * R * 0.71, top + R * 0.02, cz + Math.cos(a) * R * 0.71));
+  } else if (id === 'gafas_sol' || id === 'gafas_dev') {
+    const dev = id === 'gafas_dev', y = f.min.y + H * 0.52, z = front + R * 0.02, frame = am(dev ? 'gdev' : 'gsol', dev ? 0x111111 : 0x1a1a1a, { roughness: 0.3 });
+    const lens = dev ? am('lensd', 0x9ad7ff, { transparent: true, opacity: 0.35, roughness: 0.05 }) : am('lenss', 0x0a0a12, { roughness: 0.08, metalness: 0.6 });
+    [-1, 1].forEach(sd => {
+      if (dev) {
+        add(new T.BoxGeometry(W * 0.3, H * 0.17, R * 0.03), lens, cx + sd * W * 0.2, y, z);
+        const t = R * 0.045;
+        add(new T.BoxGeometry(W * 0.33, t, t), frame, cx + sd * W * 0.2, y + H * 0.09, z); add(new T.BoxGeometry(W * 0.33, t, t), frame, cx + sd * W * 0.2, y - H * 0.09, z);
+        add(new T.BoxGeometry(t, H * 0.19, t), frame, cx + sd * W * 0.05, y, z); add(new T.BoxGeometry(t, H * 0.19, t), frame, cx + sd * W * 0.36, y, z);
+      } else {
+        const l = add(new T.CylinderGeometry(W * 0.15, W * 0.15, R * 0.04, 24), lens, cx + sd * W * 0.2, y, z, Math.PI / 2); l.scale.z = 0.8;
+      }
+      add(new T.BoxGeometry(R * 0.04, R * 0.04, D * 0.55), frame, cx + sd * W * 0.38, y + H * 0.04, z - D * 0.27);   // patas
+    });
+    add(new T.BoxGeometry(W * 0.12, R * 0.04, R * 0.04), frame, cx, y + H * 0.03, z);
+  } else if (id === 'mochila') {
+    const y = f.center.y, z = back - R * 0.32;
+    add(new T.BoxGeometry(W * 0.62, H * 0.9, R * 0.62), am('moch', 0x2f9e00, { roughness: 0.8 }), cx, y, z);
+    add(new T.BoxGeometry(W * 0.48, H * 0.36, R * 0.2), am('moch2', 0x1f6d00, { roughness: 0.8 }), cx, y - H * 0.18, z - R * 0.38);
+    add(new T.BoxGeometry(W * 0.5, R * 0.1, R * 0.1), am('moch3', 0xffd23f), cx, y + H * 0.38, z - R * 0.3);
+    [-1, 1].forEach(sd => add(new T.BoxGeometry(W * 0.09, H * 1.0, R * 0.08), am('moch2', 0x1f6d00), cx + sd * W * 0.26, y, back + R * 0.05));
+  } else if (id === 'capa_roja' || id === 'capa_sena') {
+    const sena = id === 'capa_sena', len = H * 2.6, wid = W * 1.05;
+    const geo = new T.PlaneGeometry(wid, len, 6, 10); geo.translate(0, -len / 2, 0);
+    const p = geo.attributes.position; for (let i = 0; i < p.count; i++) { const u = p.getX(i) / wid, t = -p.getY(i) / len; p.setZ(i, -Math.cos(u * Math.PI) * R * 0.18 - t * t * R * 0.5); p.setX(i, p.getX(i) * (1 + t * 0.45)); }
+    geo.computeVertexNormals();
+    const mat = sena ? am('capas', 0x2f9e00, { side: T.DoubleSide, roughness: 0.7 }) : am('capar', 0xc81e2a, { side: T.DoubleSide, roughness: 0.7 });
+    const cape = add(geo, mat, cx, f.max.y - H * 0.08, back - R * 0.05); cape.userData.cape = true;
+    if (sena) { const logo = new T.Mesh(new T.CircleGeometry(W * 0.2, 24), am('capal', 0xffffff, { side: T.DoubleSide })); logo.position.set(0, -len * 0.42, -R * 0.36); logo.rotation.y = Math.PI; cape.add(logo); }
+    [-1, 1].forEach(sd => add(new T.SphereGeometry(R * 0.09, 10, 8), am('oro', 0xffc81a, { metalness: 0.85, roughness: 0.25 }), cx + sd * wid * 0.42, f.max.y - H * 0.08, back + R * 0.05));
+  }
+  return g;
+}
+// Viste un modelo: quita lo anterior y pone lo de eq ({cabeza, cara, espalda}).
+function dressModel(root, eq) {
+  if (!root) return;
+  const old = []; root.traverse(o => { if (o.userData.isAcc) old.push(o); });
+  old.forEach(o => o.parent && o.parent.remove(o));
+  const fit = rigFit(root); if (!fit || !eq) return;
+  let skin = null; root.traverse(o => { if (o.isSkinnedMesh && !skin) skin = o; });
+  ['cabeza', 'cara', 'espalda'].forEach(slot => {
+    const id = eq[slot], f = slot === 'espalda' ? fit.chest : fit.head; if (!id || !f) return;
+    const bone = skin.skeleton.bones.find(b => b.name === f.bone.name); if (!bone) return;
+    const holder = new T.Group(); holder.userData.isAcc = true; holder.quaternion.copy(f.q);
+    holder.add(buildAcc(id, f)); bone.add(holder);
+  });
+}
+const capeSway = (root, t, speed) => root && root.traverse(o => { if (o.userData.cape) o.rotation.x = -0.12 - Math.min(0.9, speed * 0.09) + Math.sin(t * 7) * 0.05 * (1 + speed * 0.2); });
+// estelas: chispas detrás del jugador al moverse
+const TRAIL_COL = { estela_verde: [0x39d98a, 0x7bdc3a], estela_dorada: [0xffd23f, 0xffa600], estela_arcoiris: null };
+const trail = [], trailGeo = new T.SphereGeometry(0.07, 6, 5);
+function emitTrail(id, x, y, t) {
+  if (!id || !TRAIL_COL.hasOwnProperty(id) || trail.length > 140) return;
+  const col = TRAIL_COL[id] ? TRAIL_COL[id][Math.random() < 0.5 ? 0 : 1] : new T.Color().setHSL((t * 0.6 + Math.random() * 0.15) % 1, 0.9, 0.6).getHex();
+  const m = new T.Mesh(trailGeo, new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9, depthWrite: false }));
+  m.position.set(x + (Math.random() - 0.5) * 0.3, y + 0.15 + Math.random() * 0.6, -0.2 + (Math.random() - 0.5) * 0.3); scene.add(m);
+  trail.push({ m, life: 0.6 + Math.random() * 0.3, t: 0 });
+}
+let trailT = 0;
+function updateTrails(dt) {
+  const now = performance.now() / 1000;
+  trailT -= dt;
+  if (trailT <= 0) {
+    trailT = 0.035;
+    if (model && model.visible && Math.abs(player.vx) > 2.5 && !player.dead && !player.ghost && game.state === 'play') emitTrail(curEq().estela, player.x, player.y, now);
+    remotes.forEach(r => { if (r.model && r.model.visible && r.eq && Math.abs(r.vx) > 2.5 && !r.dead && !r.ghost) emitTrail(r.eq.estela, r.x, r.y, now); });
+  }
+  for (let i = trail.length - 1; i >= 0; i--) {
+    const p = trail[i]; p.t += dt; const k = p.t / p.life;
+    p.m.material.opacity = 0.9 * (1 - k); p.m.scale.setScalar(1 - k * 0.7); p.m.position.y += dt * 0.4;
+    if (k >= 1) { scene.remove(p.m); p.m.material.dispose(); trail.splice(i, 1); }
+  }
+  capeSway(model, now, Math.abs(player.vx));
+  remotes.forEach(r => capeSway(r.model, now + r.x, Math.abs(r.vx)));
+}
+// lo que tiene puesto el jugador (en la tienda se puede probar algo sin comprarlo)
+let previewEq = null, shopTurn = 0;   // en la tienda el personaje se gira para mostrar la espalda
+const curEq = () => previewEq || (persist ? wardrobe.eq || {} : {});
+const eqString = eq => SLOTS.map(k => (eq || {})[k] || '').join(',');
+const parseEq = s => { const a = String(s || '').split(','), o = {}; SLOTS.forEach((k, i) => { if (a[i] && shopItem(a[i]) && shopItem(a[i]).slot === k) o[k] = a[i]; }); return o; };
+function redress() { dressModel(model, curEq()); }
+window.SENA_SHOP = {
+  items: SHOP, slots: SLOTS,
+  wallet, owned: () => wardrobe.owned.slice(), eq: () => Object.assign({}, wardrobe.eq || {}),
+  eqString: () => eqString(persist ? wardrobe.eq : {}),
+  preview(eq) { previewEq = eq; redress(); },
+  turn(back) { shopTurn = back ? Math.PI * 0.8 : 0; },
+  flush() { clearTimeout(statsTimer); if (persist) try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (_) {} },
+  setWardrobe(w) { wardrobe = { owned: (w && w.owned) || [], eq: (w && w.eq) || {} }; if (persist) try { localStorage.setItem(WARD_KEY, JSON.stringify(wardrobe)); } catch (_) {} achCheck(new Set()); redress(); },
+};
 
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
@@ -1667,7 +1917,7 @@ function killEnemy(e, how) {
   if (e.def.kind === 'boss' && how !== 'boss') return;   // al jefe solo se le vence pisándolo
   if (e.uid != null && e.def.kind !== 'boss') net('kill', { u: e.uid, h: how === 'stomp' ? 1 : 0 });
   e.alive = false; e.deadT = 0; e.mode = how; addScore(e.def.score * (how === 'stomp' ? 1 : 2));
-  if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); if (!netMute) game.runKills = (game.runKills || 0) + 1; }
+  if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); if (!netMute) { game.runKills = (game.runKills || 0) + 1; addStat('kills'); } }
   if (how === 'stomp') { SFX.stomp(); e.body.scale.y = 0.3 * e.def.scale; spawnFrag(e.x, e.y + 0.3, MAT.stone, 4, 3); }
   else { SFX.punch(); e.vy = 9; e.vx = player.facing * 3; e.mesh.rotation.z = Math.PI; }
 }
@@ -1732,7 +1982,28 @@ const ICONS = {
   dash:     '<path d="M3 8h9M2 12h13M5 16h9"/><path d="M15 6l6 6-6 6"/>',
   code:     '<path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/>',
   lock:     '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  star:     '<path d="M12 3l2.7 5.6 6.1.8-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1L3.2 9.4l6.1-.8z"/>',
+  trophy:   '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M8 20h8M9.5 17h5"/>',
+  flag:     '<path d="M5 21V4"/><path d="M5 4h13l-2.5 4L18 12H5"/>',
+  map:      '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
+  flame:    '<path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-3.8 2.5-5 .3 1.8 1.2 2.6 2 3 0-3-1-5 .5-8z"/>',
+  bug:      '<rect x="8" y="7" width="8" height="12" rx="4"/><path d="M12 7v12M9 4l1.5 3M15 4l-1.5 3M4 11h4M16 11h4M4 16h4M16 16h4"/>',
+  coin:     '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/>',
+  crown:    '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 10H5z"/><path d="M5 21h14"/>',
+  bolt:     '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  heart:    '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  shirt:    '<path d="M8 3l-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3a4 4 0 0 1-8 0z"/>',
+  cap:      '<path d="M4 14a8 8 0 0 1 16 0z"/><path d="M12 6v2M4 14h17l-1 2H4z"/>',
+  helmet:   '<path d="M4 15a8 8 0 0 1 16 0"/><path d="M2 15h20v2H2z"/><path d="M12 7v8"/>',
+  headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
+  hat:      '<path d="M2 16c2 2 18 2 20 0"/><path d="M7 15.5V9c0-1.5 2.2-3 5-3s5 1.5 5 3v6.5"/><path d="M7 11h10"/>',
+  glasses:  '<circle cx="7" cy="13" r="3.5"/><circle cx="17" cy="13" r="3.5"/><path d="M10.5 12.5h3M3.5 12L2 9M20.5 12L22 9"/>',
+  glasses2: '<rect x="2.5" y="9.5" width="8" height="6" rx="1"/><rect x="13.5" y="9.5" width="8" height="6" rx="1"/><path d="M10.5 12h3"/>',
+  backpack: '<rect x="5" y="6" width="14" height="15" rx="3"/><path d="M9 6V4h6v2M8 14h8v4H8z"/>',
+  cape:     '<path d="M7 3h10l1 3c2 5 2 10 3 15H3c1-5 1-10 3-15z"/><path d="M9 3c0 2 1.3 3 3 3s3-1 3-3"/>',
+  sparkle:  '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
 };
+window.SENA_ICON = (n, size) => iconSvg(n, size);
 function iconSvg(name, size = 22) {
   return `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 }
@@ -1754,6 +2025,7 @@ window.SENA_RELOAD = () => {   // la nube trajo progreso nuevo: releerlo del alm
   Object.assign(game.progress, loadProgress()); game.world = game.progress.world;
   for (const k of Object.keys(powerData)) delete powerData[k];
   Object.assign(powerData, loadPowers()); setPowerUI();
+  stats = readJSON(STATS_KEY, {}); wardrobe = readJSON(WARD_KEY, { owned: [], eq: {} }); if (model) redress();
 };
 window.SENA_BEST_SCORE = () => +(localStorage.getItem('senabros_best') || 0);
 window.SENA_SET_GUEST = on => {   // invitado: empieza de cero y no guarda; al salir se vuelve a leer lo guardado
@@ -1761,7 +2033,7 @@ window.SENA_SET_GUEST = on => {   // invitado: empieza de cero y no guarda; al s
   if (on) {
     Object.assign(game.progress, { done: [0, 0], node: [0, 0], world: 0 }); game.world = 0;
     for (const k of Object.keys(powerData)) delete powerData[k];
-    setPowerUI();
+    setPowerUI(); stats = {}; wardrobe = { owned: [], eq: {} }; if (model) redress();
   } else window.SENA_RELOAD();
 };
 window.SENA_STATS = () => ({ best: window.SENA_BEST_SCORE(), levels: game.progress.done[0] + game.progress.done[1], totalLevels: 11,
@@ -2309,7 +2581,7 @@ function update(dt) {
     const hh = player.h * 0.5, fs = player.facing > 0 ? 1 : -1;
     model.position.set(player.x + fs * hh * Math.sin(player.tilt), player.y + hh - hh * Math.cos(player.tilt), 0);
     model.rotation.z = player.tilt;
-    const target = (inMenu() && game.state !== 'won') ? -Math.PI / 2 : player.dead ? 0 : (player.facing > 0 ? 0 : -Math.PI);
+    const target = (inMenu() && game.state !== 'won') ? -Math.PI / 2 + shopTurn : player.dead ? 0 : (player.facing > 0 ? 0 : -Math.PI);
     player.rot += (target - player.rot) * Math.min(1, dt * 14);
     model.rotation.y = player.rot;
     // tamaño: parpadeo entre chico y grande al crecer/encogerse (como en Mario)
@@ -2334,7 +2606,7 @@ function update(dt) {
   }
   const tnow = performance.now() / 1000;
   coins.forEach(c => { if (!c.taken) { c.m.rotation.y = tnow * 2.2 + c.ph; c.m.position.y = c.y + Math.sin(tnow * 3 + c.ph) * 0.08; } });
-  updateRemotes(dt); updateMpFx(dt);
+  updateRemotes(dt); updateMpFx(dt); updateTrails(dt);
   updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateSparks(dt); updatePfx(dt); updatePowerUI();
   if (MAT.lava.map) { MAT.lava.map.offset.x = tnow * 0.05; MAT.lava.map.offset.y = Math.sin(tnow * 0.7) * 0.04; MAT.lava.emissiveIntensity = 0.8 + Math.sin(tnow * 3) * 0.15; }
   if (flag) flag.userData.cloth.rotation.y = Math.sin(tnow * 3) * 0.15;
@@ -2385,7 +2657,7 @@ async function getChar(file) {
 function setCharacter(g) {
   if (mixer) mixer.stopAllAction();
   if (model) scene.remove(model);
-  model = g.scene; scene.add(model);
+  model = g.scene; scene.add(model); redress();
   mixer = new T.AnimationMixer(model); actions = {}; cur = null; curName = '';
   g.animations.filter(c => c.name.startsWith('M_')).forEach(c => { actions[c.name] = mixer.clipAction(c); });
   play('M_Idle', { fade: 0 });
@@ -2775,7 +3047,7 @@ Promise.all(enemyEntries.map(name =>
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
   if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel,
-    remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName })) };   // solo en modo prueba
+    remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName, cos: r.cos || '' })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
     if (tc) await selectChar(CHARS.findIndex(c => c[0] === tc[1]));

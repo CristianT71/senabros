@@ -834,3 +834,107 @@ body:not(.touch) #tSettings .touch-only { display: none; }
 #menuGear { flex: none; width: 58px; display: flex; align-items: center; justify-content: center; border-radius: 14px; border: 3px solid var(--ink); background: #d8e2d4; color: var(--ink); cursor: pointer; box-shadow: 0 6px 0 var(--ink); }
 #menuGear svg { width: 26px; height: 26px; }
 #menuGear:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
+
+/* ================= Menú: Ranking, Tienda, Logros ================= */
+.subrow { display: flex; gap: 8px; align-self: stretch; margin-top: 2px; }
+.subrow button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 6px; border-radius: 12px; border: 3px solid var(--ink);
+  background: #0b1f10e6; color: #fff; font: 900 14px "Trebuchet MS", sans-serif; letter-spacing: 1px; cursor: pointer; box-shadow: 0 4px 0 var(--ink); }
+.subrow button svg { color: var(--gold); flex: none; }
+.subrow button:hover { background: var(--sena-d); }
+.subrow button:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.subrow #menuGear { flex: 0 0 52px; width: auto; background: #d8e2d4; color: var(--ink); box-shadow: 0 4px 0 var(--ink); }
+.subrow #menuGear svg { color: var(--ink); width: 22px; height: 22px; }
+.ico-w { display: inline-flex; }
+
+/* ---- Ranking ---- */
+.rk-wrap { position: absolute; top: 60px; bottom: 0; left: 50%; transform: translateX(-50%); width: min(760px, 94vw); padding-bottom: 18px; display: flex; flex-direction: column; gap: 10px; }
+.rk-boards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.rk-boards button, .rk-week button { padding: 10px 6px; border-radius: 12px; border: 2px solid #ffffff26; background: #0b1f10e6; color: #d7e9d0; font: 900 14px "Trebuchet MS", sans-serif; cursor: pointer; }
+.rk-boards button.on, .rk-week button.on { background: var(--sena); border-color: var(--sena-l); color: #fff; }
+.rk-bar { display: flex; gap: 10px; align-items: center; }
+.rk-bar select { flex: 1; min-width: 0; padding: 9px 11px; border-radius: 10px; border: 2px solid #ffffff55; background: #04100a; color: #fff; font: 700 14px "Trebuchet MS", sans-serif; }
+.rk-bar select[hidden] { display: none; }
+.rk-week { display: flex; gap: 6px; margin-left: auto; } .rk-week button { padding: 8px 12px; font-size: 13px; }
+.rk-info { font-size: 12px; font-weight: 700; color: #bcd6b4; }
+.rk-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 18px; background: linear-gradient(180deg, #0b2012ee, #061309f2); border: 3px solid #ffffff2a; box-shadow: 0 6px 0 var(--ink); }
+.rk-row { display: grid; grid-template-columns: 44px 44px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 12px; background: #ffffff0d; animation: slideIn .35s both; }
+.rk-row.gap { margin-top: 12px; }
+.rk-pos { font: 900 20px "Trebuchet MS", sans-serif; text-align: center; color: #d7e9d0; }
+.rk-pos.crown { color: var(--gold); filter: drop-shadow(0 0 6px #ffd23f99); }
+.rk-face { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: radial-gradient(circle at 50% 35%, #8be04e, #2a7d00); border: 2px solid #ffffff55; }
+.rk-face img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.15) translateY(4%); }
+.rk-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; } .rk-name small { color: var(--gold); font-size: 12px; }
+.rk-val { font: 900 16px "Trebuchet MS", sans-serif; color: var(--gold); white-space: nowrap; }
+.rk-row.r1 { background: linear-gradient(90deg, #ffd23f40, #ffd23f12); border: 2px solid var(--gold); padding: 10px 12px; }
+.rk-row.r1 .rk-face { width: 46px; height: 46px; border-color: var(--gold); box-shadow: 0 0 14px #ffd23f88; } .rk-row.r1 .rk-name { font-size: 18px; }
+.rk-row.r2 { border: 2px solid #d8e2ff88; } .rk-row.r2 .rk-pos { color: #d8e2ff; }
+.rk-row.r3 { border: 2px solid #e0904088; } .rk-row.r3 .rk-pos { color: #e09040; }
+.rk-row.me { outline: 2px dashed #fff; outline-offset: -4px; }
+.rk-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px; text-align: center; color: #d7e9d0; font-weight: 700; }
+.rk-empty b { font-size: 16px; color: #fff; } .rk-empty.wide { grid-column: 1 / -1; margin: 0; background: #ffd23f1a; border: 2px solid var(--gold); border-radius: 12px; }
+
+/* ---- Logros ---- */
+.ach-wrap { position: absolute; top: 60px; bottom: 0; left: 50%; transform: translateX(-50%); width: min(980px, 94vw); padding-bottom: 18px; display: flex; flex-direction: column; gap: 12px; }
+.ach-head { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-radius: 16px; background: #0b1f10e6; border: 3px solid var(--gold); }
+.ach-head b { font-size: 18px; color: var(--gold); white-space: nowrap; }
+.ach-bar { flex: 1; height: 12px; border-radius: 8px; background: #0008; overflow: hidden; } .ach-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--sena-l), var(--gold)); transition: width .6s; }
+.ach-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; align-content: start; padding: 2px; }
+.ach { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 16px; background: linear-gradient(180deg, #0b2012ee, #061309f2); border: 2px solid #ffffff22; opacity: .75; animation: pop .3s both; }
+.ach.done { opacity: 1; border-color: var(--gold); box-shadow: 0 0 18px #ffd23f33; }
+.ach-ico { flex: none; width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center; background: #ffffff10; color: #8a9a86; }
+.ach.done .ach-ico { background: radial-gradient(circle, #ffd23f55, #ffd23f18); color: var(--gold); }
+.ach-txt { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.ach-txt b { font-size: 15px; } .ach-txt small { font-size: 12px; color: #bcd6b4; }
+.ach-prog { height: 6px; margin-top: 3px; border-radius: 4px; background: #0008; overflow: hidden; } .ach-prog i { display: block; height: 100%; background: var(--sena-l); }
+.ach.done .ach-prog i { background: var(--gold); }
+.ach-num { font-size: 11px; font-weight: 900; color: #d7e9d0; } .ach.done .ach-num { color: var(--gold); }
+
+/* ---- Tienda: panel a la izquierda, el instructor se ve a la derecha ---- */
+.screen.shop { background: linear-gradient(90deg, #04120af0 0%, #04120acc 36%, transparent 58%); }
+body.shop-open .menu-col, body.shop-open .hint, body.shop-open .chip { visibility: hidden; }
+.shop-panel { position: absolute; top: 60px; bottom: 16px; left: 4vw; width: min(460px, 52vw); display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 20px;
+  background: linear-gradient(180deg, #0d2a14f2, #061309f5); border: 3px solid var(--sena); box-shadow: 0 8px 0 var(--ink), 0 20px 50px #000a; animation: slideIn .4s both; }
+.shop-wallet { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 14px; background: #0007; border: 2px solid var(--gold); }
+.shop-wallet b { display: block; font-size: 24px; color: var(--gold); line-height: 1; } .shop-wallet small { font-size: 11px; color: #d7e9d0; font-weight: 800; letter-spacing: 1px; }
+.coin-ico { width: 34px; height: 34px; flex: none; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff3a8, #ffd23f 45%, #c98a00); border: 3px solid #8a5a00; box-shadow: inset 0 0 0 3px #ffe680; }
+.coin-ico.sm { width: 14px; height: 14px; border-width: 2px; box-shadow: none; display: inline-block; }
+.shop-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.shop-tabs button { padding: 8px 4px; border-radius: 10px; border: 2px solid #ffffff26; background: #0005; color: #d7e9d0; font: 900 13px "Trebuchet MS", sans-serif; cursor: pointer; }
+.shop-tabs button.on { background: var(--sena); border-color: var(--sena-l); color: #fff; }
+.shop-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; align-content: start; }
+.item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px 10px; border-radius: 14px; border: 2px solid #ffffff22; background: #0006; color: #fff; cursor: pointer; font-family: inherit; transition: transform .1s, border-color .15s; }
+.item:hover { transform: translateY(-2px); border-color: #ffffff66; }
+.item.sel { border-color: var(--gold); background: #ffd23f1c; box-shadow: 0 0 14px #ffd23f44; }
+.item.worn::after { content: ""; position: absolute; top: 8px; right: 8px; width: 10px; height: 10px; border-radius: 50%; background: #39d98a; box-shadow: 0 0 8px #39d98a; }
+.item-ico { width: 58px; height: 58px; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: var(--tint); background: radial-gradient(circle, #ffffff18, #ffffff05); }
+.item b { font-size: 12.5px; text-align: center; line-height: 1.2; }
+.item .tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 8px; font: 900 12px "Trebuchet MS", sans-serif; background: #ffffff18; color: #d7e9d0; }
+.item .tag.price { color: var(--gold); } .item .tag.poor { color: #ff9a9a; } .item .tag.on { background: #39d98a33; color: #39d98a; }
+.shop-foot { display: flex; align-items: center; gap: 10px; padding-top: 8px; border-top: 2px solid #ffffff1a; }
+.shop-sel { flex: 1; min-width: 0; } .shop-sel b { display: block; font-size: 16px; } .shop-sel small { font-size: 12px; color: #bcd6b4; }
+.shop-foot .go { flex: none; min-width: 170px; padding: 10px 12px; font-size: 15px; letter-spacing: 1px; }
+#shopMsg { min-height: 1.2em; }
+
+@media (max-width: 760px) {
+  .rk-boards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .rk-bar { flex-wrap: wrap; } .rk-week { margin-left: 0; }
+  .shop-panel { left: 3vw; right: 3vw; width: auto; top: 50px; }
+  .screen.shop { background: #04120ae0; }
+}
+@media (max-height: 520px) {
+  .subrow button { padding: 5px 4px; font-size: 12px; } .subrow button svg { width: 16px; height: 16px; } .subrow #menuGear { flex-basis: 42px; }
+  .rk-wrap, .ach-wrap { top: 44px; gap: 6px; padding-bottom: 8px; }
+  .rk-boards button { padding: 6px 4px; font-size: 12px; } .rk-week button { padding: 5px 8px; font-size: 11px; } .rk-bar select { padding: 5px 8px; }
+  .rk-info { font-size: 10px; } .rk-row { padding: 4px 10px; grid-template-columns: 34px 32px minmax(0, 1fr) auto; } .rk-face { width: 30px; height: 30px; } .rk-name, .rk-val { font-size: 14px; }
+  .rk-row.r1 { padding: 5px 10px; } .rk-row.r1 .rk-face { width: 34px; height: 34px; }
+  .ach-head { padding: 5px 12px; } .ach-head b { font-size: 14px; } .ach { padding: 7px; } .ach-ico { width: 40px; height: 40px; }
+  .shop-panel { top: 44px; bottom: 6px; padding: 8px; gap: 6px; width: min(420px, 56vw); } .shop-wallet { padding: 4px 10px; } .shop-wallet b { font-size: 18px; } .coin-ico { width: 26px; height: 26px; }
+  .shop-tabs button { padding: 5px 2px; font-size: 11px; } .item { padding: 6px 4px; gap: 3px; } .item-ico { width: 40px; height: 40px; } .item-ico svg { width: 26px; height: 26px; }
+  .shop-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); } .shop-foot .go { min-width: 130px; padding: 7px 8px; font-size: 13px; }
+}
+.slot .champ { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--gold); filter: drop-shadow(0 0 4px #ffd23f); }
+/* pantallas medianas (laptops): el menú ahora tiene una fila más, se compacta para que quepa el logo */
+@media (min-height: 521px) and (max-height: 820px) {
+  .menu-col { gap: 10px; }
+  .logo-top { font-size: 72px; } .logo-bottom { font-size: 82px; margin-left: 56px; }
+}
+@media (max-height: 520px) { .menu-col .subtitle { display: none; } .menu-col { transform: translateY(-50%); } }
