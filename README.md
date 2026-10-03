@@ -17,7 +17,9 @@ los instructores de ADSO (Análisis y Desarrollo de Software) contra los bugs.
 | Poder del instructor | K | ⚡ |
 | Volver al mapa | Esc | ⏸ |
 
-- 2 mundos: **Yamboró** (6 niveles) y **Volcán Binario** (5 niveles, jefe final: el Bug Rey).
+- 3 mundos: **Yamboró** (6 niveles), **Volcán Binario** (5 niveles, jefe: el Bug Rey) y **La Nube** (5 niveles:
+  islas sobre el vacío, piso de hielo que resbala, cintas transportadoras, rayos que avisan antes de caer y el
+  jefe final, el Bug Supremo, con 5 de vida y que llama rayos).
 - 7 instructores, cada uno con un poder que se desbloquea cumpliendo una misión y gasta energía (monedas, bugs y ladrillos la recargan).
 - El progreso, los poderes desbloqueados y los ajustes de controles se guardan en el navegador.
 
@@ -33,6 +35,7 @@ SenaBros/
 │   ├── online.js           Cuentas, amigos, retos y progreso en la nube (Supabase)
 │   ├── multiplayer.js      Salas en tiempo real (Supabase Realtime): presencia, posiciones y eventos
 │   ├── premios.js          Pantallas de Ranking, Logros y Tienda
+│   ├── editor.js           Editor de niveles y niveles de la comunidad
 │   ├── assets.js           Rutas de modelos e imágenes (y ASSET_V para forzar una versión nueva)
 │   ├── libs/               Decodificador meshopt (para los .glb comprimidos)
 │   └── config.js           URL y llave pública (anon) de Supabase
@@ -60,6 +63,18 @@ SenaBros/
 - Ojo: los contadores los envía el navegador, así que alguien con conocimientos podría inflarlos. Para un juego de
   aprendizaje está bien; si algún día hay premios reales, habría que validar las partidas en un servidor.
 
+## Editor de niveles (botón Crear)
+
+- Cuadrícula de 14 filas y de 30 a 240 columnas, 9 escenarios y 24 piezas: suelo, ladrillo, bloques ?, hongo y piedra,
+  tubos, monedas, trampolín, los 3 bugs, cañón, fuego, rayo, plataformas (ida y vuelta, ascensor, que cae), cintas,
+  inicio, checkpoint y bandera. Se pinta con el dedo o el ratón; dos dedos (o la herramienta Mover) desplazan la vista.
+- **Probar** abre el nivel al instante; **Guardar** lo deja en el navegador (Mis borradores).
+- **Publicar** lo sube con un código `NV-XXXXX`. En **Comunidad** se ven los populares y los nuevos, se busca por nombre
+  o código, se juega y se da me gusta. Enlace directo: `index.html#nivel=NV-XXXXX`.
+- El servidor valida cada nivel (`publish_level`: 14 filas, solo letras conocidas, con bandera; máximo 15 por persona).
+- Los niveles creados no dan monedas para la tienda, logros ni puestos en el ranking (así nadie arma niveles llenos de monedas).
+- Formato: `{ v:1, W, rows:[14 textos] }`; la conversión a nivel jugable es `editorToSpec()` en `js/game.js`.
+
 ## Agregar o cambiar un modelo
 
 Los .glb se comprimen con [gltf-transform](https://gltf-transform.dev) (geometría con meshopt y texturas WebP):
@@ -77,7 +92,7 @@ La calidad de gráficos (automática, alta, media, baja) se cambia en Ajustes; e
 Agrega al final de la dirección:
 
 - `#test=2-5` abre el nivel 2-5
-- `#test=map2` abre el mapa del Mundo 2
+- `#test=map2` abre el mapa del Mundo 2 (`#test=3-4` abre la Tormenta Eléctrica del Mundo 3)
 - `#test=1-3;c=Juan` abre el 1-3 con Juan
 
 ## Modo online (Supabase)
