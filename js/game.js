@@ -69,6 +69,76 @@ Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 12, bottom: -6, ne
 sun.shadow.bias = -0.0006;
 scene.add(sun, sun.target);
 
+// ================= Calidad de gráficos =================
+// Automática: en PC alta; en celular media, o baja si el celular tiene poca memoria o pocos núcleos.
+// Si en automática el juego va lento (menos de 28 fps), baja un nivel sola.
+const QKEY = 'senabros_quality', Q_ORDER = ['alta', 'media', 'baja'];
+const QUALITY = {
+  alta:  { pr: MOBILE ? 1.5 : 2, shadows: true, smap: MOBILE ? 1024 : 2048 },
+  media: { pr: 1, shadows: true, smap: 1024 },
+  baja:  { pr: 0.75, shadows: false, smap: 512 },
+};
+const autoQuality = () => !MOBILE ? 'alta' : ((navigator.deviceMemory || 8) <= 3 || (navigator.hardwareConcurrency || 8) <= 4 ? 'baja' : 'media');
+let qPref = 'auto', qLevel = '';
+try { qPref = localStorage.getItem(QKEY) || 'auto'; } catch (_) {}
+if (qPref !== 'auto' && !QUALITY[qPref]) qPref = 'auto';
+function applyQuality(level) {
+  const q = QUALITY[level], had = renderer.shadowMap.enabled; qLevel = level;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, q.pr)); resize();
+  renderer.shadowMap.enabled = q.shadows; sun.castShadow = q.shadows;
+  if (sun.shadow.mapSize.x !== q.smap) { sun.shadow.mapSize.set(q.smap, q.smap); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  if (had !== q.shadows) scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true; }); });   // recompilar con o sin sombras
+  syncGfxUI();
+}
+function setQuality(pref) {
+  qPref = pref; try { localStorage.setItem(QKEY, pref); } catch (_) {}
+  applyQuality(pref === 'auto' ? autoQuality() : pref);
+}
+const Q_LABEL = { alta: 'Alta', media: 'Media', baja: 'Baja' };
+function syncGfxUI() {
+  document.querySelectorAll('#gfxBtns button').forEach(b => b.classList.toggle('on', b.dataset.q === qPref));
+  const note = document.getElementById('gfxNote');
+  if (note) note.textContent = qPref === 'auto' ? 'Ahora: ' + Q_LABEL[qLevel] + '. Se ajusta sola si el juego va lento.'
+    : qLevel === 'baja' ? 'Sin sombras y menos resolución: ideal para celulares sencillos.' : qLevel === 'media' ? 'Sombras más simples y resolución normal.' : 'Máxima calidad: sombras suaves y alta resolución.';
+}
+let fpsT = 0, fpsN = 0;
+function watchFps(raw) {   // en automática, si va lento por 6 s seguidos, baja la calidad
+  if (qPref !== 'auto' || game.state !== 'play' || document.hidden) { fpsT = fpsN = 0; return; }
+  fpsT += Math.min(raw, 0.25); fpsN++;
+  if (fpsT < 6) return;
+  const fps = fpsN / fpsT, i = Q_ORDER.indexOf(qLevel); fpsT = fpsN = 0;
+  if (fps < 28 && i < Q_ORDER.length - 1) { applyQuality(Q_ORDER[i + 1]); toast('Gráficos en ' + Q_LABEL[qLevel].toLowerCase() + ' para que vaya más fluido', 2200); }
+}
+applyQuality(qPref === 'auto' ? autoQuality() : qPref);
+document.querySelectorAll('#gfxBtns button').forEach(b => b.addEventListener('click', () => setQuality(b.dataset.q)));
+// en PC la ventana de ajustes se abre desde el menú (en celular la maneja touch.js)
+const tSettings = document.getElementById('tSettings');
+function openGfx() { tSettings.classList.add('show'); window.SENA_PAUSED = true; syncGfxUI(); }
+function closeGfx() { if (document.body.classList.contains('touch')) return; tSettings.classList.remove('show'); window.SENA_PAUSED = false; }
+document.getElementById('menuGear').addEventListener('click', () => { if (document.body.classList.contains('touch')) document.getElementById('tGear').click(); else openGfx(); });
+document.getElementById('sClose').addEventListener('click', closeGfx);
+tSettings.addEventListener('pointerdown', e => { if (e.target === tSettings) closeGfx(); });
+
+// ================= Liberar memoria al cambiar de nivel =================
+// Lo que se crea para un nivel (geometrías, materiales y texturas propias) se borra de la tarjeta de video al salir.
+// Lo compartido (bloques, materiales base, modelos de enemigos, jugadores) se conserva.
+function collectRes(root, set) {
+  root.traverse(o => {
+    if (o.geometry) set.add(o.geometry);
+    if (o.material) [].concat(o.material).forEach(m => { set.add(m); for (const k in m) { const v = m[k]; if (v && v.isTexture) set.add(v); } });
+  });
+}
+function disposeLevel(group) {
+  const keep = new Set(), kill = new Set();
+  scene.children.forEach(c => { if (c !== group) collectRes(c, keep); });
+  Object.values(enemyTemplates).forEach(t => collectRes(t, keep));
+  Object.values(MAT).forEach(m => { keep.add(m); if (m.map) keep.add(m.map); if (m.emissiveMap) keep.add(m.emissiveMap); });
+  Object.values(GEO).forEach(g => keep.add(g));
+  Object.values(BG.tex).forEach(b => b && keep.add(b.t));
+  collectRes(group, kill);
+  kill.forEach(r => { if (!keep.has(r)) r.dispose(); });
+}
+
 // ================= Texturas pixeladas =================
 function canvasTex(draw, size = 64) {
   const c = document.createElement('canvas'); c.width = c.height = size;
@@ -343,7 +413,7 @@ function makeGrid(L) {
 }
 
 function buildLevel() {
-  if (levelGroup) scene.remove(levelGroup);
+  if (levelGroup) { scene.remove(levelGroup); disposeLevel(levelGroup); }
   levelGroup = new T.Group(); scene.add(levelGroup);
   blockMesh = {}; coins = []; enemies = []; powerups = []; coinIdx = 0;
   const L = levelSpec(game.level);
@@ -467,7 +537,7 @@ function buildLevel() {
 }
 
 // Fondo 2D con parallax (plano lejano que se mueve más lento que el nivel). Cada nivel tiene su imagen;
-// las de los niveles 1-2..1-6 están en assets/fondos/<nombre>.js y se cargan solo cuando hacen falta.
+// las de los niveles 1-2..1-6 están en assets/fondos/<nombre>.webp y se cargan solo cuando hacen falta.
 const BG = { Z: -25, H: 34, PARALLAX: 0.93, mesh: null, key: '', tex: {} };
 function setBackdrop(key) {
   BG.key = key;
@@ -483,10 +553,7 @@ function setBackdrop(key) {
   };
   if (key === 'yamboro') return load(window.BG_YAMBORO);
   if (PROC_BG[key]) return load(drawBackdrop(key));
-  if (window.BG_IMG && window.BG_IMG[key]) return load(window.BG_IMG[key]);
-  const sc = document.createElement('script'); sc.src = 'assets/fondos/' + key + '.js';
-  sc.onload = () => load(window.BG_IMG[key]);
-  document.head.appendChild(sc);
+  load(ASSET_URL('fondos/' + key + '.webp'));
 }
 // Fondos dibujados por código (Mundo 2): volcán, océano al atardecer y fortaleza
 const PROC_BG = { volcano: 1, ocean: 1, fortress: 1 };
@@ -2299,27 +2366,19 @@ function update(dt) {
 }
 
 // ================= Arranque =================
-function b64ToBuf(b) { const s = atob(b); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; }
-const loader = new T.GLTFLoader();
-const parseGLB = b64 => new Promise((res, rej) => loader.parse(b64ToBuf(b64), '', res, rej));
-// ---------- Selección de personaje (cada uno se carga bajo demanda desde assets/personajes/<archivo>.js) ----------
+// Modelos .glb comprimidos (geometría con meshopt y texturas WebP)
+const loader = new T.GLTFLoader(); loader.setMeshoptDecoder(window.MeshoptDecoder);
+const loadGLB = path => new Promise((res, rej) => loader.load(ASSET_URL(path), res, undefined, () => rej(new Error('No se pudo cargar ' + path))));
+// ---------- Selección de personaje (cada uno se carga bajo demanda desde assets/modelos/personajes/<archivo>.glb) ----------
 const CHARS = [['Diego', 'Diego'], ['Wilson', 'Wilson'], ['Juan', 'Juan'], ['Carlos', 'Carlos'],
                ['Intructor', 'Instructor'], ['Jhonny', 'Jhonny'], ['Fabian', 'Fabian']];
 let charIdx = 0, charLoading = false;
 const charCache = {};
 const charNameEl = document.getElementById('charName'), charDotsEl = document.getElementById('charDots');
-function loadCharScript(file) {
-  return new Promise((res, rej) => {
-    if (window.CHAR_GLB && window.CHAR_GLB[file]) return res();
-    const s = document.createElement('script'); s.src = 'assets/personajes/' + file + '.js';
-    s.onload = () => res(); s.onerror = () => rej(new Error('No se pudo cargar assets/personajes/' + file + '.js'));
-    document.body.appendChild(s);
-  });
-}
+const charLoads = {};
 async function getChar(file) {
   if (charCache[file]) return charCache[file];
-  await loadCharScript(file);
-  const g = await parseGLB(window.CHAR_GLB[file]); delete window.CHAR_GLB[file];
+  const g = await (charLoads[file] = charLoads[file] || loadGLB('modelos/personajes/' + file + '.glb'));
   g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
   return (charCache[file] = g);
 }
@@ -2700,11 +2759,11 @@ document.getElementById('prevChar').onclick = () => { if (inMenu()) selectChar(c
 document.getElementById('nextChar').onclick = () => { if (inMenu()) selectChar(charIdx + 1); };
 
 const loadBar = document.getElementById('loadBar'), loadText = document.getElementById('loadText');
-const enemyEntries = Object.entries(window.ENEMY_GLB_B64);
+const enemyEntries = window.ENEMY_FILES;
 const totalSteps = enemyEntries.length + 2; let doneSteps = 0;
 const step = msg => { doneSteps++; loadBar.style.width = Math.round(doneSteps / totalSteps * 100) + '%'; if (msg) loadText.textContent = msg; };
-Promise.all(enemyEntries.map(([name, b64]) =>
-  parseGLB(b64).then(g => { enemyTemplates[name] = g.scene; step('Cargando bugs y monedas...'); })
+Promise.all(enemyEntries.map(name =>
+  loadGLB('modelos/enemigos/' + name + '.glb').then(g => { enemyTemplates[name] = g.scene; step('Cargando bugs y monedas...'); })
 )).then(() => { loadText.textContent = 'Llamando a los instructores...'; return getChar(CHARS[0][0]); }).then(gltf => {
   step('Construyendo Yamboró...');
   setCharacter(gltf); updateCharUI();
@@ -2715,7 +2774,7 @@ Promise.all(enemyEntries.map(([name, b64]) =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; },
+  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel,
     remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
@@ -2731,7 +2790,7 @@ Promise.all(enemyEntries.map(([name, b64]) =>
   }, 600);
   let last = performance.now();
   (function loop(now) {
-    const dt = Math.min(0.033, (now - last) / 1000); last = now;
+    const raw = (now - last) / 1000, dt = Math.min(0.033, raw); last = now; watchFps(raw);
     if (!window.SENA_PAUSED) update(dt);   // pausado mientras se abren los ajustes
     renderer.render(scene, camera); requestAnimationFrame(loop);
   })(last);

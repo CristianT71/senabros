@@ -753,8 +753,8 @@ body.touch.mplevel #chatLog { top: 54px; }
 .room-head b { font: 900 34px monospace; letter-spacing: 8px; color: var(--gold); text-shadow: 0 0 18px #ffd23f88; }
 .room-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: 14px; }
 .room-main { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-bottom: 6px; }
-.panel, .room-side { padding: 12px 14px; border-radius: 18px; background: linear-gradient(180deg, #0b2012ee, #061309f2); border: 3px solid #ffffff2a; box-shadow: 0 6px 0 var(--ink); }
-.panel[hidden] { display: none; }
+#mpRoom .panel, .room-side { padding: 12px 14px; border-radius: 18px; background: linear-gradient(180deg, #0b2012ee, #061309f2); border: 3px solid #ffffff2a; box-shadow: 0 6px 0 var(--ink); }
+#mpRoom .panel[hidden] { display: none; }
 .panel-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .panel-h .ptitle, #mpResults .ptitle { margin: 0; } #mpResults .ptitle { margin-bottom: 8px; color: var(--gold); }
 .panel-h small { font-size: 12px; font-weight: 700; color: #bcd6b4; text-align: right; }
@@ -815,7 +815,7 @@ body.touch.mplevel #chatLog { top: 54px; }
 @media (max-height: 520px) {
   .mp-room { top: 44px; gap: 8px; padding: 2px 3vw 8px; } .room-head { padding: 5px 12px; } .room-head b { font-size: 22px; letter-spacing: 5px; }
   .room-body { grid-template-columns: minmax(0, 1fr) 250px; gap: 10px; overflow: hidden; } .room-main { overflow-y: auto; gap: 8px; }
-  .panel, .room-side { padding: 8px 10px; } .panel-h { margin-bottom: 6px; }
+  #mpRoom .panel, .room-side { padding: 8px 10px; } .panel-h { margin-bottom: 6px; }
   .slots { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .slot { padding: 20px 4px 6px; } .sframe { width: 46px; margin-bottom: 4px; }
   .slot b { font-size: 12px; } .slot small { font-size: 9px; } .sbadges span { font-size: 8px; padding: 1px 5px; }
   .modes { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .modes button { padding: 6px 8px; } .modes button svg { width: 18px; height: 18px; }
@@ -823,3 +823,14 @@ body.touch.mplevel #chatLog { top: 54px; }
   .gp-foot { margin-top: 8px; } .gp-foot select { padding: 7px; } .gp-foot .go { min-width: 140px; padding: 8px 0; font-size: 15px; }
   .side-tabs button { padding: 5px; font-size: 12px; } .lobby-chat { min-height: 50px; }
 }
+
+/* ================= Ajustes: gráficos ================= */
+.ts-sec { margin-top: 4px; font-size: 11px; letter-spacing: 2px; font-weight: 900; color: var(--sena-l); }
+.gfx { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.gfx button { padding: 9px 4px; border-radius: 10px; border: 2px solid #ffffff33; background: #0006; color: #fff; font: 900 13px "Trebuchet MS", sans-serif; cursor: pointer; }
+.gfx button.on { border-color: var(--gold); background: #ffd23f26; color: var(--gold); }
+.ts-note { font-size: 12px; font-weight: 700; color: #bcd6b4; min-height: 1.3em; }
+body:not(.touch) #tSettings .touch-only { display: none; }
+#menuGear { flex: none; width: 58px; display: flex; align-items: center; justify-content: center; border-radius: 14px; border: 3px solid var(--ink); background: #d8e2d4; color: var(--ink); cursor: pointer; box-shadow: 0 6px 0 var(--ink); }
+#menuGear svg { width: 26px; height: 26px; }
+#menuGear:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }

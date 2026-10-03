@@ -32,18 +32,32 @@ SenaBros/
 │   ├── touch.js            Controles táctiles y ventana de ajustes (solo en celular)
 │   ├── online.js           Cuentas, amigos, retos y progreso en la nube (Supabase)
 │   ├── multiplayer.js      Salas en tiempo real (Supabase Realtime): presencia, posiciones y eventos
+│   ├── assets.js           Rutas de modelos e imágenes (y ASSET_V para forzar una versión nueva)
+│   ├── libs/               Decodificador meshopt (para los .glb comprimidos)
 │   └── config.js           URL y llave pública (anon) de Supabase
-├── assets/                 Lo que carga el juego (modelos e imágenes en base64)
-│   ├── enemigos.js         Robot 404, Entrega Tardía, Archivo Corrupto, café y empanada
-│   ├── fondo-yamboro.js    Fondo del nivel 1-1
-│   ├── retratos.js         Retratos de los instructores para el menú
-│   ├── personajes/         Un archivo por instructor (modelo 3D + 12 animaciones)
-│   └── fondos/             Fondos de los niveles 1-2 a 1-6 (se cargan al entrar)
+├── assets/                 Archivos pesados: se bajan solo cuando hacen falta y quedan en caché
+│   ├── modelos/personajes/ Un .glb por instructor (modelo 3D + 12 animaciones)
+│   ├── modelos/enemigos/   Robot 404, Entrega Tardía, Archivo Corrupto, café y empanada
+│   ├── fondos/             Fondos de los niveles (.webp)
+│   └── retratos/           Retratos de los instructores (.webp)
+├── vercel.json             Caché larga para assets/ (un año)
 ├── supabase/migrations/    Tablas y reglas de seguridad de la base de datos (SQL)
 └── fuentes/                Originales para editar en Blender (no se suben a GitHub)
     ├── modelos/            .glb de Tripo y versiones optimizadas
     └── imagenes/           Fondos en alta resolución, retratos y referencias
 ```
+
+## Agregar o cambiar un modelo
+
+Los .glb se comprimen con [gltf-transform](https://gltf-transform.dev) (geometría con meshopt y texturas WebP):
+
+```
+npx @gltf-transform/cli webp modelo.glb tmp.glb --quality 75
+npx @gltf-transform/cli meshopt tmp.glb assets/modelos/personajes/Nombre.glb --level high
+```
+
+Como los assets quedan guardados un año en el navegador, si reemplazas un archivo sube `ASSET_V` en `js/assets.js`.
+La calidad de gráficos (automática, alta, media, baja) se cambia en Ajustes; en automática baja sola si el juego va lento.
 
 ## Probar un nivel directo
 

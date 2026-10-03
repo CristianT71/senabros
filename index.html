@@ -242,7 +242,7 @@
         </div>
       </div>
 
-      <div class="playrow"><button id="startBtn"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 3.5l14 8.5-14 8.5z"/></svg> JUGAR</button><button id="mpBtn" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.6c3 0 5 1.8 5 4.4"/></svg>EN LÍNEA</button></div>
+      <div class="playrow"><button id="startBtn"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 3.5l14 8.5-14 8.5z"/></svg> JUGAR</button><button id="mpBtn" type="button"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.6c3 0 5 1.8 5 4.4"/></svg>EN LÍNEA</button><button id="menuGear" type="button" aria-label="Ajustes" title="Ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button></div>
       <div class="hint"><kbd>&larr;</kbd><kbd>&rarr;</kbd> elegir &nbsp;&middot;&nbsp; <kbd>ENTER</kbd> jugar</div>
     </div>
 
@@ -321,17 +321,21 @@
   <!-- Ajustes de controles (celular) -->
   <div id="tSettings">
     <div class="ts-card">
-      <div class="ts-title">AJUSTES DE CONTROLES</div>
-      <label>Tamaño de la cruceta <b id="vPad">100%</b><input type="range" id="sPad" min="60" max="160" step="5"></label>
-      <label>Tamaño de los botones <b id="vBtn">100%</b><input type="range" id="sBtn" min="60" max="160" step="5"></label>
-      <label>Transparencia <b id="vOp">88%</b><input type="range" id="sOp" min="25" max="100" step="5"></label>
-      <label class="chk"><input type="checkbox" id="sVib"> Vibrar al tocar</label>
-      <label class="chk"><input type="checkbox" id="sSwap"> Zurdo (cruceta a la derecha)</label>
-      <div class="ts-row">
+      <div class="ts-title">AJUSTES</div>
+      <div class="ts-sec">GRÁFICOS</div>
+      <div class="gfx" id="gfxBtns"><button type="button" data-q="auto">Automática</button><button type="button" data-q="alta">Alta</button><button type="button" data-q="media">Media</button><button type="button" data-q="baja">Baja</button></div>
+      <small id="gfxNote" class="ts-note"></small>
+      <div class="touch-only ts-sec">CONTROLES</div>
+      <label class="touch-only">Tamaño de la cruceta <b id="vPad">100%</b><input type="range" id="sPad" min="60" max="160" step="5"></label>
+      <label class="touch-only">Tamaño de los botones <b id="vBtn">100%</b><input type="range" id="sBtn" min="60" max="160" step="5"></label>
+      <label class="touch-only">Transparencia <b id="vOp">88%</b><input type="range" id="sOp" min="25" max="100" step="5"></label>
+      <label class="chk touch-only"><input type="checkbox" id="sVib"> Vibrar al tocar</label>
+      <label class="chk touch-only"><input type="checkbox" id="sSwap"> Zurdo (cruceta a la derecha)</label>
+      <div class="ts-row touch-only">
         <button id="sMove" class="big">MOVER CONTROLES</button>
       </div>
       <div class="ts-row">
-        <button id="sReset">Restablecer</button>
+        <button id="sReset" class="touch-only">Restablecer</button>
         <button id="sClose" class="ok">LISTO</button>
       </div>
     </div>
@@ -354,9 +358,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
-  <script src="assets/enemigos.js"></script>
-  <script src="assets/fondo-yamboro.js"></script>
-  <script src="assets/retratos.js"></script>
+  <script src="js/libs/meshopt_decoder.js"></script>
+  <script src="js/assets.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
   <script src="js/game.js"></script>
