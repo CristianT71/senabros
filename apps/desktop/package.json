@@ -52,6 +52,7 @@
       "shortcutName": "SENA Bros",
       "deleteAppDataOnUninstall": false
     },
+    "protocols": [{ "name": "SENA Bros", "schemes": ["senabros"] }],
     "publish": [
       {
         "provider": "github",

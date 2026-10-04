@@ -399,8 +399,22 @@ $('fSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preve
 $('meCopy').onclick = () => { navigator.clipboard?.writeText($('meCode').textContent); setMsg('ID copiado', true); };
 $('acctGoogle').onclick = async () => {
   const btn = $('acctGoogle'); btn.disabled = true; setMsg('Abriendo Google...', true);
-  const { error } = await db.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
-  if (error) { setMsg(friendly(error)); btn.disabled = false; }
+  const app = window.SENA_APP && SENA_APP.native;   // en la app de Windows/Android Google se hace en el navegador y vuelve con senabros://auth
+  const { data, error } = await db.auth.signInWithOAuth({ provider: 'google', options: app ? { redirectTo: 'senabros://auth', skipBrowserRedirect: true } : { redirectTo: location.origin + location.pathname } });
+  if (error) { setMsg(friendly(error)); btn.disabled = false; return; }
+  if (app) { SENA_APP.openExternal(data.url); setMsg('Entra con Google en el navegador y vuelve aquí', true); setTimeout(() => { btn.disabled = false; }, 8000); }
+};
+// Regreso de Google en la app: llega senabros://auth con el código o los tokens de la sesión
+window.SENA_AUTH_CALLBACK = async url => {
+  try {
+    const u = new URL(url), q = u.searchParams, h = new URLSearchParams(u.hash.replace(/^#/, ''));
+    if (q.get('error') || h.get('error')) throw new Error(q.get('error_description') || h.get('error_description') || 'Google canceló el ingreso');
+    const code = q.get('code'), at = h.get('access_token'), rt = h.get('refresh_token');
+    const r = code ? await db.auth.exchangeCodeForSession(code) : at && rt ? await db.auth.setSession({ access_token: at, refresh_token: rt }) : { error: new Error('Respuesta de Google inválida') };
+    if (r.error) throw r.error;
+    setMsg('', true);
+  } catch (e) { setMsg(friendly(e)); }
+  $('acctGoogle').disabled = false;
 };
 $('meRename').onclick = async () => {
   const n = (prompt('Elige tu usuario (3 a 16 letras, números o _). Solo podrás cambiarlo una vez:', state.profile.username) || '').trim();

@@ -23,6 +23,36 @@ import java.net.URL;
 public class ApkUpdaterPlugin extends Plugin {
     private volatile boolean busy = false;
 
+    // Google: el navegador vuelve con senabros://auth?... y llega aquí como intent
+    private void emitAuth(Intent i) {
+        if (i == null || i.getData() == null || !"senabros".equals(i.getData().getScheme())) return;
+        JSObject d = new JSObject();
+        d.put("url", i.getData().toString());
+        i.setData(null);
+        notifyListeners("authUrl", d, true);
+    }
+
+    @Override
+    public void load() {
+        emitAuth(getActivity().getIntent());
+    }
+
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        super.handleOnNewIntent(intent);
+        emitAuth(intent);
+    }
+
+    @PluginMethod
+    public void openUrl(PluginCall call) {
+        String url = call.getString("url");
+        if (url == null || !url.startsWith("https://")) { call.reject("url"); return; }
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(i);
+        call.resolve();
+    }
+
     private File apkFile() {
         File dir = new File(getContext().getCacheDir(), "update");
         dir.mkdirs();

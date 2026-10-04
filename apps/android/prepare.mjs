@@ -17,7 +17,8 @@ cpSync(join(here, 'native', 'MainActivity.java'), join(pkgDir, 'MainActivity.jav
 // 2) Permisos y pantalla horizontal
 edit(join(SRC, 'AndroidManifest.xml'), s => {
   if (!s.includes('REQUEST_INSTALL_PACKAGES')) s = s.replace('</manifest>', '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>');
-  return s.replace('<activity', '<activity\n            android:screenOrientation="sensorLandscape"');
+  const link = '<intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="senabros" android:host="auth" />\n            </intent-filter>\n        </activity>';
+  return s.replace('<activity', '<activity\n            android:screenOrientation="sensorLandscape"').replace('</activity>', link);
 });
 
 // 3) Versión y firma (el mismo .keystore en cada versión, para que Android deje actualizar encima)

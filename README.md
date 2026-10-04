@@ -128,6 +128,8 @@ otros dispositivos se juega en la web. Las apps abren el mismo juego y avisan de
 - `apps/android/`: Android con Capacitor. `native/ApkUpdaterPlugin.java` descarga el APK nuevo con progreso y abre el instalador
   (Android siempre pide confirmar la instalación). `senabros.keystore` firma todas las versiones: **no lo pierdas ni lo cambies**, si no
   Android no deja actualizar encima de la app instalada.
+- **Google en las apps:** el botón abre el navegador y Google devuelve a la app con el enlace `senabros://auth`. Esa dirección debe estar
+  en Supabase > Authentication > URL Configuration > Redirect URLs.
 - `js/nativo.js`: detección, botón de descarga y ventana de actualización.
 - Compilan solas en GitHub Actions (`.github/workflows/release.yml`). Para sacar una versión nueva:
 

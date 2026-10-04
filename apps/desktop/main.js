@@ -8,8 +8,12 @@ const WWW = app.isPackaged ? path.join(process.resourcesPath, 'www') : path.join
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
 if (!app.requestSingleInstanceLock()) app.quit();
-let win = null;
-app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+let win = null, pendingAuth = null;
+// Google: el navegador devuelve a la app con senabros://auth?... y Windows abre (o reutiliza) esta aplicación
+app.setAsDefaultProtocolClient('senabros');
+const authArg = argv => argv.find(a => /^senabros:\/\//i.test(a));
+const sendAuth = u => { if (win && !win.isDestroyed() && !win.webContents.isLoading()) win.webContents.send('authurl', u); else pendingAuth = u; };
+app.on('second-instance', (_, argv) => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } const u = authArg(argv); if (u) sendAuth(u); });
 
 function createWindow() {
   win = new BrowserWindow({
@@ -25,6 +29,7 @@ function createWindow() {
     if (i.key === 'F11') { win.setFullScreen(!win.isFullScreen()); e.preventDefault(); }
     else if (i.key === 'Escape' && win.isFullScreen() && false) win.setFullScreen(false);
   });
+  win.webContents.on('did-finish-load', () => { if (pendingAuth) { win.webContents.send('authurl', pendingAuth); pendingAuth = null; } });
   win.on('closed', () => { win = null; });
 }
 
@@ -35,6 +40,7 @@ app.whenReady().then(() => {
     if (!f.startsWith(WWW)) return new Response('no', { status: 403 });
     return net.fetch(pathToFileURL(f).toString());
   });
+  pendingAuth = authArg(process.argv) || null;
   createWindow();
   app.on('activate', () => { if (!win) createWindow(); });
 });

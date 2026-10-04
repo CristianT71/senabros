@@ -1156,7 +1156,7 @@ body.bossfight #raceTimer { top: 118px; }
 @media (max-height: 520px) { body.bossfight #raceTimer { top: 96px; } }
 
 /* ================= App de Windows / Android: descarga y actualización ================= */
-body.app-native #acctGoogle, body.app-native #acctMain .or, body.app-native #sInstall, body.app-native #installNote { display: none !important; }
+body.app-native #sInstall, body.app-native #installNote { display: none !important; }
 .dlbtn { display: inline-block; padding: 11px 16px; border-radius: 12px; border: 3px solid var(--ink); background: linear-gradient(180deg, #8be04e, #2a7d00); color: #fff; font: 900 14px "Trebuchet MS", sans-serif; text-decoration: none; text-align: center; box-shadow: 0 4px 0 var(--ink); cursor: pointer; }
 .dlbtn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
 #dlBox .ts-row .dlbtn { flex: 1; }
