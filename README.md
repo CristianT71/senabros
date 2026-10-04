@@ -130,6 +130,7 @@ otros dispositivos se juega en la web. Las apps abren el mismo juego y avisan de
   Android no deja actualizar encima de la app instalada.
 - **Google en las apps:** el botón abre el navegador y Google devuelve a la app con el enlace `senabros://auth`. Esa dirección debe estar
   en Supabase > Authentication > URL Configuration > Redirect URLs.
+- **Descarga:** los botones de la web apuntan a `/descargar/...`; `api/descargar.js` (función de Vercel) trae el archivo de GitHub Releases y lo entrega desde el mismo dominio.
 - `js/nativo.js`: detección, botón de descarga y ventana de actualización.
 - Compilan solas en GitHub Actions (`.github/workflows/release.yml`). Para sacar una versión nueva:
 

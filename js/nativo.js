@@ -3,7 +3,7 @@
 // Los instaladores salen de GitHub Releases (los arma .github/workflows/release.yml al subir una etiqueta vN.N.N).
 (() => {
 'use strict';
-const REPO = 'CristianT71/senabros', BASE = 'https://github.com/' + REPO + '/releases/latest/download/';
+const REPO = 'CristianT71/senabros', BASE = '/descargar/';   // la descarga sale de este mismo sitio (api/descargar.js la trae de GitHub Releases)
 const FILES = { windows: 'SenaBros-Setup.exe', android: 'SenaBros.apk' };
 const cap = window.Capacitor, desk = window.senaNative;
 const kind = desk ? 'windows' : (cap && cap.isNativePlatform && cap.isNativePlatform()) ? 'android' : 'web';
@@ -20,7 +20,7 @@ if (APP.native) document.body.classList.add('app-native');
 const Apk = kind === 'android' ? cap.registerPlugin('ApkUpdater') : null;
 APP.openExternal = url => { if (kind === 'android') Apk.openUrl({ url }).catch(() => {}); else window.open(url, '_blank'); };
 const onAuth = u => { if (window.SENA_AUTH_CALLBACK) SENA_AUTH_CALLBACK(u); };
-if (kind === 'windows') desk.onAuthUrl(onAuth); else if (Apk) Apk.addListener('authUrl', d => onAuth(d.url));
+if (kind === 'windows') desk.onAuthUrl && desk.onAuthUrl(onAuth); else if (Apk) Apk.addListener('authUrl', d => onAuth(d.url));
 const newer = (a, b) => { const x = String(a).replace(/^v/, '').split('.').map(Number), y = String(b).replace(/^v/, '').split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] | 0) !== (y[i] | 0)) return (x[i] | 0) > (y[i] | 0); } return false; };
 
 // ---------- Ventana de actualización ----------
