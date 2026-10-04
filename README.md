@@ -134,6 +134,11 @@ Agrega al final de la dirección:
   quien la toca primero se la queda. Pisar a otro le roba monedas y tocar un bug quita 3. Marcador en vivo y podio.
 - **Supervivencia:** en equipo contra oleadas de bugs cada vez más rápidas y numerosas; cada 5 oleadas sale el Bug Rey.
   Los caídos reviven al empezar la siguiente oleada. Si cae todo el equipo termina y se muestra la oleada alcanzada.
+- **Fiesta de minijuegos:** 4 rondas al azar entre 5 minijuegos: *El piso se cae* (último en pie), *Rey de la colina*
+  (tiempo en la zona dorada), *Atrapa la corona* (pisas al que la tiene para quitársela), *Lluvia de rayos* (último en pie)
+  y *Duelo de preguntas* (3 preguntas ADSO, gana quien acierte más rápido). Cada ronda da 3-2-1-0 puntos, al final hay
+  podio y en la sala el anfitrión tiene el botón **Revancha**. Cada jugador simula su ronda y envía su resultado (`pres`);
+  todos calculan la misma tabla. `#pfast` en la dirección acorta los minijuegos a 8 s (solo para pruebas).
 - **Red:** cada jugador solo envía su posición cuando cambia (y una señal de vida por segundo) para no pasar el límite de
   mensajes de Realtime; los jugadores salen escalonados para no quedar pegados.
 - **Chat:** tecla T (o el botón Chat) durante el nivel; también en la sala. Mensajes rápidos, texto libre (máx. 60, con filtro

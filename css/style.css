@@ -1021,3 +1021,24 @@ body.quiz-open #touch { display: none !important; }
   .qz-opt { padding: 6px 8px; font-size: 13px; } .qz-opt b { width: 22px; height: 22px; } .qz-feed { padding: 6px 8px; } .qz-feed p { font-size: 12px; } #qzNext { padding: 8px 0; }
 }
 @media (max-width: 520px) { .qz-opts { grid-template-columns: 1fr; } }
+
+/* ================= Fiesta de minijuegos ================= */
+#partyBox { position: fixed; inset: 0; z-index: 14; display: flex; align-items: center; justify-content: center; padding: 12px; pointer-events: none; background: radial-gradient(ellipse at center, #0008, #000b); }
+#partyBox[hidden] { display: none; }
+.pb-card { width: min(560px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 20px; border-radius: 20px; text-align: center;
+  background: linear-gradient(180deg, #2a1060f2, #120630f5); border: 3px solid #ff7ad9; box-shadow: 0 8px 0 var(--ink), 0 0 50px #ff7ad955; animation: pop .35s both; }
+#pbRound { font: 900 13px "Trebuchet MS", sans-serif; letter-spacing: 3px; color: #ff9ae3; }
+#pbName { font: italic 900 34px "Trebuchet MS", sans-serif; color: var(--gold); -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke fill; line-height: 1.1; }
+#pbRule { margin: 0; font-size: 15px; font-weight: 700; color: #f0e6ff; line-height: 1.4; }
+#pbCount { font: italic 900 64px "Trebuchet MS", sans-serif; color: #fff; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; min-height: 0; }
+#pbBody { width: 100%; display: flex; flex-direction: column; gap: 5px; }
+.pb-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 12px; background: #ffffff12; text-align: left; animation: slideIn .3s both; }
+.pb-row img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: radial-gradient(circle at 50% 35%, #8be04e, #2a7d00); border: 2px solid #ffffff55; }
+.pb-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .pb-row span { font-size: 13px; color: #e6dcff; } .pb-row i { font-style: normal; font-weight: 900; color: var(--gold); }
+.pb-row.me { outline: 2px dashed #fff; outline-offset: -3px; }
+.pb-row.p1 { background: #ffd23f40; border: 2px solid var(--gold); } .pb-row.p2 { background: #d8e2ff2a; border: 2px solid #d8e2ff; } .pb-row.p3 { background: #e090402a; border: 2px solid #e09040; }
+.pb-final #pbName { font-size: 30px; }
+.revancha { margin-top: 10px; width: 100%; }
+#mpRoom .modes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 900px) { #mpRoom .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } #mpModeParty { grid-column: 1 / -1; } }
+@media (max-height: 520px) { #mpRoom .modes { grid-template-columns: repeat(5, minmax(0, 1fr)); } #mpModeParty { grid-column: auto; } .pb-card { padding: 8px 12px; gap: 4px; } #pbName { font-size: 22px; } #pbRule { font-size: 12px; } #pbCount { font-size: 40px; } .pb-row { padding: 3px 8px; } .pb-row img { width: 26px; height: 26px; } }

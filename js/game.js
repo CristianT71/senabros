@@ -1127,6 +1127,7 @@ const MODE_EVENTS = {   // qué se comparte en cada modo (en equipo se comparte 
   race: new Set(['finish', 'stomp', 'loot']),
   battle: new Set(['cspawn', 'cgrab', 'stomp', 'loot']),
   survival: new Set(['kill', 'boss', 'wave', 'revive']),
+  party: new Set(['pround', 'pres', 'pcrown', 'stomp']),
 };
 function net(type, payload) {
   if (!game.mp || netMute || !window.SENA_NET) return;
@@ -1227,7 +1228,7 @@ function updateRemotes(dt) {
   remotes.forEach(r => {
     if (!r.model) return;
     const vis = show && r.has && now - r.last < 6000;   // si deja de enviar 6 s, se oculta
-    r.model.visible = r.tag.visible = vis; if (r.helpTag) r.helpTag.visible = vis && r.ghost;
+    r.model.visible = r.tag.visible = vis; if (r.helpTag) r.helpTag.visible = vis && r.ghost && !pState();
     if (!vis) return;
     // extrapolación corta con su velocidad + suavizado hacia la posición recibida
     const age = Math.min(0.25, (now - r.last) / 1000);
@@ -1246,8 +1247,8 @@ function updateRemotes(dt) {
 }
 function applyRemoteState(uid, st) {
   const r = remotes.get(uid); if (!r) return;
-  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d; r.fin = !!st.fin; r.coins = st.c | 0; r.kills = st.kl | 0;
-  if (!!st.g !== !!r.ghost) { r.ghost = !!st.g; if (r.model) setModelOpacity(r.model, r.ghost ? 0.38 : 1); if (r.helpTag) r.helpTag.visible = r.ghost; }
+  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d; r.fin = !!st.fin; r.coins = st.c | 0; r.kills = st.kl | 0; r.pv = +st.pv || 0;
+  if (!!st.g !== !!r.ghost) { r.ghost = !!st.g; if (r.model) setModelOpacity(r.model, r.ghost ? 0.38 : 1); if (r.helpTag) r.helpTag.visible = r.ghost && !pState(); }
   r.last = performance.now();
   if (!r.has) { r.has = true; r.x = st.x; r.y = st.y; }
   if (st.a && r.model && (st.a !== r.curName || Math.abs((st.s || 1) - (r.cur ? r.cur.timeScale : 1)) > 0.05)) remotePlay(r, st.a, st.s || 1);
@@ -1274,6 +1275,12 @@ function applyRemoteEvent(uid, name, type, p) {
     } else if (type === 'finish') {
       if (game.mp.mode === 'race') raceFinished(uid, name, p.t);
       else if (game.state === 'play' && !player.dead) { toast(name + ' llegó a la meta', 2200); netMute = false; if (player.ghost) reviveSelf(null, true); startWin(true); }
+    } else if (type === 'pround') {
+      netMute = false; partyRound(p.r | 0, p.list, p.seed | 0);
+    } else if (type === 'pres') {
+      const P = pState(); if (P && (p.r | 0) >= P.r) (P.res[p.r | 0] = P.res[p.r | 0] || {})[uid] = +p.v || 0;
+    } else if (type === 'pcrown') {
+      const P = pState(); if (P && (p.r | 0) === P.r) partyCrown(p.u, false);
     } else if (type === 'cspawn') {
       battleSpawnCoin(p.i, p.x, p.y, p.v);
     } else if (type === 'cgrab') {
@@ -1293,11 +1300,11 @@ function localNetState() {
   if (!game.mp || !model || !(game.state === 'play' || game.state === 'win' || game.state === 'won')) return null;
   const r2 = v => Math.round(v * 100) / 100;
   return { x: r2(player.x), y: r2(player.y), vx: r2(player.vx), vy: r2(player.vy), f: player.facing, a: curName, s: r2(cur ? cur.timeScale : 1),
-    d: player.dead ? 1 : 0, g: player.ghost ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x), fin: game.mp.finished ? 1 : 0, c: game.coins | 0, kl: game.runKills | 0 };
+    d: player.dead ? 1 : 0, g: player.ghost || player.spect ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x), fin: game.mp.finished ? 1 : 0, c: game.coins | 0, kl: game.runKills | 0, pv: game.mp.party ? Math.round(game.mp.party.val * 10) / 10 : 0 };
 }
 function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}], me }
   stopMP();
-  const mode = ['race', 'battle', 'survival'].includes(opts.mode) ? opts.mode : 'coop';
+  const mode = ['race', 'battle', 'survival', 'party'].includes(opts.mode) ? opts.mode : 'coop';
   game.mp = { me: opts.me, mode, order: [], finished: false, sent: false, t0: performance.now(), raceLeft: 0, names: {},
     ids: (opts.order || []).slice(), battleLeft: 120, wave: 0, waveBreak: 2.5, coinT: 1, bcoins: new Map(), nextCoin: 0, over: false };
   opts.players.forEach(q => { game.mp.names[q.uid] = q.name; });
@@ -1305,19 +1312,20 @@ function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}]
   Object.assign(game, { score: 0, coins: 0, lives: 3, energy: 0, challenge: null });
   game.world = opts.world - 1; MAPN = WORLDS[game.world].nodes;
   if (mode === 'battle' || mode === 'survival') { game.arena = arenaSpec(mode); startLevel(-1); }
+  else if (mode === 'party') { game.arena = partyArena('duelo'); game.arena.name = 'Fiesta de minijuegos'; startLevel(-1); partyInit(); }
   else { game.arena = null; startLevel(opts.level - 1); }
   // cada jugador sale en un punto distinto (antes salían todos encima y se quedaban pegados)
   const idx = Math.max(0, game.mp.ids.indexOf(opts.me)), n = Math.max(1, game.mp.ids.length);
   const sx = game.arena ? 6 + idx * ((game.arena.W - 12) / Math.max(1, n - 1 || 1)) : 3 + idx * 1.1;
   player.x = player.safeX = sx; game.checkpoint = sx;
-  worldLabel.textContent = { race: 'CARRERA', battle: 'BATALLA', survival: 'SUPERVIVENCIA' }[mode] || 'EN EQUIPO';
+  worldLabel.textContent = { race: 'CARRERA', battle: 'BATALLA', survival: 'SUPERVIVENCIA', party: 'FIESTA' }[mode] || 'EN EQUIPO';
   document.body.classList.add('mplevel'); document.body.classList.toggle('race', mode !== 'coop');
 }
 function stopMP() {
   [...remotes.keys()].forEach(removeRemote);
   if (player.ghost) endGhost();
   chatBubbles.splice(0).forEach(b => scene.remove(b.obj));
-  document.body.classList.remove('mplevel', 'race'); game.arena = null; if (game.level < 0) { game.level = 0; buildLevel(); } ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
+  document.body.classList.remove('mplevel', 'race'); game.arena = null; player.spect = false; partyBox.hidden = true; if (quiz.open) { quiz.answered = true; closeQuiz(); } if (game.level < 0) { game.level = 0; buildLevel(); } ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
   game.mp = null;
 }
 window.SENA_MP = {
@@ -1526,6 +1534,7 @@ function raceContacts(dt) {
     // pisotón: caer encima de otro jugador lo aturde y le roba monedas
     if (stompCd <= 0 && p.vy < 0 && Math.abs(dx) < 0.6 && p.y > top - 0.45 && p.y < top + 0.3) {
       net('stomp', { u: r.uid }); stompCd = 0.8; p.vy = 15; SFX.stomp(); shake = 0.2;
+      { const P = pState(); if (P && P.g === 'corona' && P.crown === r.uid && P.crownCd <= 0) partyCrown(game.mp.me, true); }
       burstColor(r.x, top, 0xffd23f, 16, 4); play('M_Jump', { loop: false, fade: 0.05 });
       continue;
     }
@@ -1575,8 +1584,219 @@ function updateMpFx(dt) {
   else if (md === 'race') { raceContacts(dt); updateRaceHud(dt); }
   else if (md === 'battle') { raceContacts(dt); updateBattle(dt); }
   else if (md === 'survival') { checkRevives(dt); updateSurvival(dt); }
+  else if (md === 'party') { const P = pState(); if (P && P.phase === 'play' && P.g !== 'duelo') raceContacts(dt); updateParty(dt); updateScoreHud('pv', dt); }
 }
 
+
+
+// ================= Fiesta de minijuegos (modo en línea) =================
+// 4 rondas de 5 minijuegos posibles. Cada jugador simula su ronda y al final envía su resultado ('pres');
+// todos calculan la misma tabla de puntos (3-2-1-0). El que reparte (isSpawner) arranca cada ronda con 'pround'.
+const PARTY_GAMES = {
+  piso:   { name: 'El piso se cae', rule: 'Los bloques avisan en rojo y se caen. ¡Sé el último en pie! Puedes empujar y pisar.', time: 50, surv: true, unit: 's' },
+  colina: { name: 'Rey de la colina', rule: 'Quédate dentro de la zona dorada (cambia de lugar). Empuja y pisa a los demás.', time: 45, unit: 's' },
+  corona: { name: 'Atrapa la corona', rule: 'Agarra la corona y no la sueltes. Pisa a quien la tenga para quitársela.', time: 45, unit: 's' },
+  rayos:  { name: 'Lluvia de rayos', rule: 'Los rayos marcan un círculo amarillo antes de caer. ¡Esquívalos!', time: 50, surv: true, unit: 's' },
+  duelo:  { name: 'Duelo de preguntas', rule: '3 preguntas de programación. Gana quien acierte más y más rápido.', time: 60, unit: 'pts' },
+};
+const PARTY_ROUNDS = 4, PARTY_PTS = [3, 2, 1, 0];
+const partyFast = () => /pfast/.test(location.hash);   // solo para pruebas automáticas: minijuegos de 8 s
+const partyBox = document.getElementById('partyBox');
+function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function partyArena(g) {
+  const W = 36, solid = [], blocks = [], springs = [], gaps = [];
+  const plat = (a, b, y) => { for (let x = a; x <= b; x++) solid.push([x, y]); };
+  const walls = () => { for (let y = 2; y < 14; y++) solid.push([0, y], [1, y], [W - 2, y], [W - 1, y]); };
+  let theme = 'evening', bg = 'atardecer', style = 'grass';
+  if (g === 'piso') { gaps.push([0, W - 1]); plat(6, 29, 4); plat(11, 24, 8); theme = 'sky'; bg = 'sky'; style = 'cloud'; }
+  else if (g === 'colina' || g === 'corona') { walls(); plat(6, 11, 5); plat(24, 29, 5); plat(14, 21, 8); springs.push(3.5, 32.5); if (g === 'corona') { theme = 'datahwy'; bg = 'datahwy'; style = 'tech'; } }
+  else if (g === 'rayos') { walls(); plat(8, 12, 5); plat(23, 27, 5); theme = 'storm'; bg = 'storm'; style = 'cloud'; }
+  else { walls(); theme = 'day'; bg = 'yamboro'; }
+  return { name: PARTY_GAMES[g] ? PARTY_GAMES[g].name : 'Fiesta', theme, bg, style, gaps, blocks, solid, pipes: [], coins: [], plats: [], fires: [], cannons: [], springs,
+    enemies: [], belts: [], bolts: [], flagX: W + 60, W, time: 999, checkpoint: 999, deathY: -3, party: g };
+}
+function partyInit() {
+  game.mp.party = { r: -1, list: null, seed: 0, phase: 'wait', t: 2.5, val: 0, out: false, res: {}, pts: {}, wins: {}, crown: null, crownCd: 0, waitT: 0 };
+}
+const pState = () => game.mp && game.mp.party;
+function partyNames(uid) { return uid === game.mp.me ? 'Tú' : (game.mp.names[uid] || (remotes.get(uid) || {}).name || '?'); }
+function partyFace(uid) { const f = uid === game.mp.me ? CHARS[charIdx][0] : (remotes.get(uid) || {}).file; return (window.PORTRAITS && PORTRAITS[f]) || ''; }
+// --- empezar una ronda (llega por red o la decide quien reparte) ---
+function partyRound(r, list, seed) {
+  const P = pState(); if (!P || r <= P.r) return;
+  Object.assign(P, { r, list, seed, phase: 'intro', t: 4.2, val: 0, out: false, crown: null, crownCd: 0, waitT: 0, tiles: [], quizI: 0, asked: false });
+  const g = list[r], rnd = seeded(seed + r * 977);
+  P.g = g; P.rnd = rnd;
+  game.arena = partyArena(g); startLevel(-1);
+  player.spect = false; if (model) model.visible = true;
+  const idx = Math.max(0, game.mp.ids.indexOf(game.mp.me)), n = Math.max(2, game.mp.ids.length);
+  const sx = g === 'piso' ? 8 + idx * (20 / (n - 1)) : 5 + idx * ((game.arena.W - 10) / (n - 1));
+  player.x = player.safeX = sx; player.y = g === 'piso' ? 5 : 2; game.checkpoint = sx;
+  if (g === 'piso') {   // orden en que se caen los bloques (igual para todos)
+    const t = game.arena.solid.map(([x, y]) => ({ x, y })).sort(() => rnd() - 0.5);
+    let at = 3; P.tiles = t.slice(0, t.length - 4).map((b, k) => { at += Math.max(0.45, 1.45 - k * 0.035); return Object.assign(b, { at, warn: false, gone: false }); });
+  }
+  if (g === 'colina') {
+    const spots = [[6, 6], [24, 6], [15, 9], [15, 2], [3, 2], [28, 2]];
+    P.zones = Array.from({ length: 8 }, () => spots[Math.floor(rnd() * spots.length)]);
+    const mat = new T.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.28, depthWrite: false });
+    P.zoneMesh = new T.Mesh(new T.BoxGeometry(4, 2.6, 1.6), mat); levelGroup.add(P.zoneMesh);
+    const ring = new T.Mesh(new T.BoxGeometry(4, 0.12, 1.7), new T.MeshBasicMaterial({ color: 0xffd23f })); P.zoneMesh.add(ring); ring.position.y = -1.25;
+  }
+  if (g === 'corona') { P.crownMesh = makePartyCrown(); levelGroup.add(P.crownMesh); }
+  if (g === 'rayos') { let at = 2; P.strikes = []; for (let k = 0; k < 90; k++) { at += Math.max(0.3, 1.25 - k * 0.025); P.strikes.push({ at, x: 2.5 + rnd() * (game.arena.W - 5), done: false }); } }
+  if (g === 'duelo') {
+    const pool = (window.SENA_PREGUNTAS || []).filter(q => q.d <= 2).slice();
+    P.qs = []; while (P.qs.length < 3 && pool.length) P.qs.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+  }
+  showPartyBox('intro');
+}
+function makePartyCrown() {
+  const g = new T.Group(), gold = new T.MeshStandardMaterial({ color: 0xffc81a, roughness: 0.25, metalness: 0.85, emissive: 0x6a4a00, emissiveIntensity: 0.5 });
+  const band = new T.Mesh(new T.CylinderGeometry(0.32, 0.34, 0.2, 20, 1, true), gold); band.material.side = T.DoubleSide; g.add(band);
+  for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2, c = new T.Mesh(new T.ConeGeometry(0.08, 0.24, 8), gold); c.position.set(Math.sin(a) * 0.31, 0.2, Math.cos(a) * 0.31); g.add(c); }
+  const gem = new T.Mesh(new T.SphereGeometry(0.07, 10, 8), new T.MeshStandardMaterial({ color: 0xff2a55, emissive: 0x6a0010 })); gem.position.set(0, 0.02, 0.33); g.add(gem);
+  g.scale.setScalar(1.25); return g;
+}
+// --- pantalla de la fiesta: presentación, resultados y podio ---
+function showPartyBox(kind) {
+  const P = pState(), $p = id => document.getElementById(id);
+  partyBox.hidden = false; partyBox.className = 'pb-' + kind;
+  if (kind === 'intro') {
+    const G = PARTY_GAMES[P.g];
+    $p('pbRound').textContent = 'RONDA ' + (P.r + 1) + ' DE ' + P.list.length; $p('pbName').textContent = G.name; $p('pbRule').textContent = G.rule; $p('pbBody').replaceChildren();
+  } else if (kind === 'results' || kind === 'final') {
+    const rows = partyTable(kind === 'final');
+    $p('pbRound').textContent = kind === 'final' ? 'RESULTADO FINAL' : 'RONDA ' + (P.r + 1) + ' DE ' + P.list.length;
+    $p('pbName').textContent = kind === 'final' ? (rows[0] && rows[0].uid === game.mp.me ? '¡GANASTE LA FIESTA!' : '¡' + (rows[0] ? partyNames(rows[0].uid) : '') + ' gana la fiesta!') : PARTY_GAMES[P.g].name;
+    $p('pbRule').textContent = kind === 'final' ? 'Así quedó la tabla después de ' + P.list.length + ' minijuegos' : 'Puntos de la ronda: 3 - 2 - 1 - 0';
+    const unit = PARTY_GAMES[P.g].unit;
+    $p('pbBody').replaceChildren(...rows.map((x, i) => {
+      const d = document.createElement('div'); d.className = 'pb-row' + (x.uid === game.mp.me ? ' me' : '') + (kind === 'final' && i < 3 ? ' p' + (i + 1) : '');
+      const img = document.createElement('img'); img.src = partyFace(x.uid); img.alt = '';
+      const n = document.createElement('b'); n.textContent = (i + 1) + '. ' + partyNames(x.uid);
+      const v = document.createElement('span'); v.textContent = kind === 'final' ? (P.wins[x.uid] | 0) + ' rondas ganadas' : (unit === 's' ? x.v.toFixed(1) + ' s' : Math.round(x.v) + ' pts');
+      const p2 = document.createElement('i'); p2.textContent = kind === 'final' ? x.total + ' pts' : '+' + x.pts + '  (' + x.total + ')';
+      d.append(img, n, v, p2); return d;
+    }));
+  }
+}
+// tabla de la ronda (o final): mismo cálculo en todos los jugadores
+function partyTable(final) {
+  const P = pState(), res = P.res[P.r] || {};
+  const uids = [...new Set([game.mp.me, ...Object.keys(res), ...Object.keys(P.pts)])];
+  if (final) return uids.map(uid => ({ uid, total: P.pts[uid] | 0 })).sort((a, b) => b.total - a.total || (a.uid < b.uid ? -1 : 1));
+  return uids.map(uid => ({ uid, v: +res[uid] || 0, pts: P.roundPts ? P.roundPts[uid] | 0 : 0, total: P.pts[uid] | 0 })).sort((a, b) => b.v - a.v || (a.uid < b.uid ? -1 : 1));
+}
+function partyScoreRound() {
+  const P = pState(), res = P.res[P.r] || {}, uids = Object.keys(res);
+  P.roundPts = {};
+  uids.forEach(u => {
+    const better = uids.filter(o => res[o] > res[u] + 1e-6).length;
+    const pts = res[u] > 0 || PARTY_GAMES[P.g].surv ? PARTY_PTS[Math.min(better, 3)] : 0;
+    P.roundPts[u] = pts; P.pts[u] = (P.pts[u] | 0) + pts; if (better === 0 && res[u] > 0) P.wins[u] = (P.wins[u] | 0) + 1;
+  });
+}
+function partySend() {   // terminó mi ronda: envío mi resultado
+  const P = pState(); if (P.phase !== 'play') return;
+  P.phase = 'sent'; P.waitT = 0;
+  const v = Math.round(P.val * 10) / 10;
+  (P.res[P.r] = P.res[P.r] || {})[game.mp.me] = v;
+  net('pres', { r: P.r, v });
+  raceTimer.textContent = 'Esperando a los demás...';
+}
+function partyOut() {   // me caí o me pegó un rayo: quedo mirando
+  const P = pState(), p = player;
+  if (!P || P.phase !== 'play' || p.spect) return;
+  p.spect = true; P.out = true; SFX.die(); shake = 0.3;
+  burstColor(p.x, Math.max(1, p.y) + 0.8, 0xff5a6a, 30, 6); toast('¡Fuera! Mira cómo termina', 1800);
+}
+function updateParty(dt) {
+  const P = pState(), p = player; if (!P) return;
+  P.t -= dt; P.crownCd -= dt;
+  if (P.phase !== 'play' || P.g === 'duelo') p.stunT = Math.max(p.stunT || 0, 0.15);   // quietos fuera del juego
+  if (P.phase === 'wait') {   // esperando la primera ronda
+    raceTimer.hidden = false; raceTimer.textContent = 'La fiesta empieza en un momento...';
+    if (P.t <= 0 && isSpawner()) {
+      const all = Object.keys(PARTY_GAMES), rnd = seeded(Date.now() & 0xffffff);
+      const list = all.sort(() => rnd() - 0.5).slice(0, PARTY_ROUNDS), seed = Math.floor(rnd() * 1e9);
+      net('pround', { r: 0, list, seed }); partyRound(0, list, seed);
+    } else if (P.t < -12) partyFinal();
+    return;
+  }
+  const G = PARTY_GAMES[P.g];
+  if (P.phase === 'intro') {
+    document.getElementById('pbCount').textContent = Math.max(1, Math.ceil(P.t));
+    if (P.t <= 0) { P.phase = 'play'; P.t = partyFast() ? 8 : G.time; partyBox.hidden = true; SFX.oneup(); if (P.g === 'duelo') partyQuiz(); }
+    return;
+  }
+  if (P.phase === 'play') {
+    const played = (partyFast() ? 8 : G.time) - P.t;
+    raceTimer.hidden = false; raceTimer.textContent = G.name + '  ' + fmtTime(Math.max(0, P.t));
+    if (G.surv) {
+      if (!P.out) P.val = played;
+      const alive = (P.out ? 0 : 1) + teammates().filter(r => !r.ghost).length;
+      if (teammates().length && alive <= 1 && played > 2) { if (!P.out) P.val = G.time + 1; P.t = Math.min(P.t, 0); }
+    }
+    if (P.g === 'piso') P.tiles.forEach(b => {
+      if (b.gone) return;
+      const m = blockMesh[b.x + ',' + b.y];
+      if (!b.warn && played >= b.at - 0.9) { b.warn = true; if (m) m.material = PARTY_WARN; }
+      if (b.warn && m) m.position.x = b.x + 0.5 + Math.sin(performance.now() / 30) * 0.05;
+      if (played >= b.at) { b.gone = true; grid[b.x][b.y] = null; if (m) { levelGroup.remove(m); delete blockMesh[b.x + ',' + b.y]; } spawnFrag(b.x + 0.5, b.y + 0.5, MAT.stone, 3, 3); }
+    });
+    if (P.g === 'rayos') P.strikes.forEach(st => { if (!st.done && played >= st.at) { st.done = true; strikeAt(st.x, 0); } });
+    if (P.g === 'colina') {
+      const z = P.zones[Math.min(P.zones.length - 1, Math.floor(played / 9))];
+      P.zoneMesh.position.set(z[0] + 2, z[1] + 1.3, 0); P.zoneMesh.material.opacity = 0.34 + Math.sin(performance.now() / 200) * 0.1;
+      const inZone = !p.spect && p.x > z[0] && p.x < z[0] + 4 && p.y >= z[1] - 0.1 && p.y < z[1] + 2.4;
+      if (inZone) { P.val += dt; P.zoneMesh.material.color.set(0x39d98a); } else P.zoneMesh.material.color.set(0xffd23f);
+      raceTimer.textContent = G.name + '  ' + fmtTime(Math.max(0, P.t)) + '   ' + (inZone ? '¡Estás en la zona!' : p.x < z[0] + 2 ? 'Zona  >>' : '<<  Zona') + (z[1] > 3 ? ' (arriba)' : '');
+    }
+    if (P.g === 'corona') {
+      const cm = P.crownMesh, tnow = performance.now() / 1000;
+      if (!P.crown) { cm.position.set(17.5, 2.8 + Math.sin(tnow * 2) * 0.15, 0); cm.rotation.y = tnow;   // suelta en el centro de la arena
+        if (P.crownCd <= 0 && !p.spect && Math.abs(p.x - 17.5) < 0.8 && Math.abs(p.y + 0.8 - 2.8) < 1.2) partyCrown(game.mp.me, true); }
+      else if (P.crown === game.mp.me) { cm.position.set(p.x, p.y + p.h + 0.3, 0); cm.rotation.y = tnow * 2; P.val += dt; }
+      else { const r = remotes.get(P.crown); if (r) cm.position.set(r.x, r.y + 1.3 * r.sc + 0.3, 0); cm.rotation.y = tnow * 2; }
+    }
+    if (P.t <= 0 && P.g !== 'duelo') partySend();
+    return;
+  }
+  if (P.phase === 'sent') {
+    P.waitT += dt;
+    const res = P.res[P.r] || {}, need = [game.mp.me, ...teammates().map(r => r.uid)];
+    if (need.every(u => u in res) || P.waitT > 6) { partyScoreRound(); P.phase = 'results'; P.t = 5.5; showPartyBox('results'); raceTimer.hidden = true; }
+    return;
+  }
+  if (P.phase === 'results') {
+    document.getElementById('pbCount').textContent = '';
+    if (P.t > 0) return;
+    if (P.r + 1 >= P.list.length) { partyFinal(); return; }
+    if (isSpawner() && !P.asked) { P.asked = true; net('pround', { r: P.r + 1, list: P.list, seed: P.seed }); partyRound(P.r + 1, P.list, P.seed); }
+    if (P.t < -12) partyFinal();   // si quien reparte se fue
+  }
+}
+function partyCrown(uid, mine) {
+  const P = pState(); if (!P || P.g !== 'corona' || P.phase !== 'play') return;
+  P.crown = uid; P.crownCd = 1.4;
+  if (mine) { net('pcrown', { r: P.r, u: uid }); SFX.oneup(); toast('¡Tienes la corona!', 1200); }
+  else if (uid !== game.mp.me) toast(partyNames(uid) + ' tiene la corona', 1200);
+}
+function partyQuiz() {
+  const P = pState(); if (!P || P.phase !== 'play') return;
+  const q = P.qs[P.quizI];
+  if (!q) { partySend(); return; }
+  openQuiz({ q, time: 12, party: true, onDone: (right, ms) => { if (right) P.val += Math.round(500 + 1000 * Math.max(0, 1 - ms / 12000)); P.quizI++; setTimeout(partyQuiz, 300); } });
+}
+function partyFinal() {
+  const P = pState(); if (!P || P.phase === 'final') return;
+  P.phase = 'final'; raceTimer.hidden = true; raceHud.hidden = true;
+  showPartyBox('final'); SFX.win();
+  if (!game.mp.sent) { game.mp.sent = true; setTimeout(() => { partyBox.hidden = true; mpFinish(); }, 6500); }
+}
+const PARTY_WARN = new T.MeshStandardMaterial({ color: 0xff3a3a, emissive: 0x8a0000, emissiveIntensity: 0.6 });
+window.SENA_PARTY = { state: () => { const P = pState(); return P ? { r: P.r, g: P.g, phase: P.phase, val: P.val, pts: P.pts, list: P.list, out: P.out, crown: P.crown } : null; } };
 
 // ================= Arenas para Batalla de monedas y Supervivencia =================
 function arenaSpec(kind) {
@@ -1634,14 +1854,16 @@ function updateBattle(dt) {
 // marcador en vivo (monedas en la batalla, bugs en supervivencia)
 function updateScoreHud(field, dt) {
   if ((hudT -= dt) > 0) return; hudT = 0.25;
-  const rows = [{ name: 'Tú', v: field === 'coins' ? game.coins : (game.runKills | 0), me: true }, ...teammates().map(r => ({ name: r.name, v: field === 'coins' ? r.coins | 0 : r.kills | 0 }))];
+  const P = pState(), pf = field === 'pv';
+  if (pf && (!P || P.phase !== 'play')) { raceHud.hidden = true; return; }
+  const rows = [{ name: 'Tú', v: pf ? Math.round(P.val * 10) / 10 : field === 'coins' ? game.coins : (game.runKills | 0), me: true, out: pf && P.out }, ...teammates().map(r => ({ name: r.name, v: pf ? r.pv : field === 'coins' ? r.coins | 0 : r.kills | 0, out: pf && r.ghost }))];
   rows.sort((a, b) => b.v - a.v);
   const max = Math.max(1, ...rows.map(r => r.v));
   raceHud.hidden = false;
   raceHud.replaceChildren(...rows.map((r, i) => {
     const d = document.createElement('div'); d.className = 'rrow' + (r.me ? ' me' : '') + (i === 0 && r.v > 0 ? ' done' : '');
     const a = document.createElement('b'); a.textContent = (i + 1) + '.';
-    const n = document.createElement('span'); n.textContent = r.name + '  ' + r.v + (field === 'coins' ? ' mon.' : ' bugs');
+    const n = document.createElement('span'); n.textContent = r.name + '  ' + (pf ? (r.out ? 'fuera' : PARTY_GAMES[P.g].unit === 's' ? r.v.toFixed(1) + ' s' : Math.round(r.v) + ' pts') : r.v + (field === 'coins' ? ' mon.' : ' bugs'));
     const bar = document.createElement('i'); bar.style.setProperty('--w', Math.round(r.v / max * 100) + '%');
     d.append(a, n, bar); return d;
   }));
@@ -1719,6 +1941,7 @@ const ACHIEVEMENTS = [
   { id: 'rey_caido', name: 'Rey caído', desc: 'Derrota al Bug Rey', icon: 'crown', stat: 'bossKills', goal: 1 },
   { id: 'intocable', name: 'Intocable', desc: 'Completa un nivel sin recibir daño', icon: 'shield', stat: 'flawless', goal: 1 },
   { id: 'poder_total', name: 'Poder total', desc: 'Desbloquea los 7 poderes', icon: 'bolt', get: () => Object.values(powerData).filter(d => d.unlocked).length, goal: 7 },
+  { id: 'fiestero', name: 'Rey de la fiesta', desc: 'Gana 3 fiestas de minijuegos', icon: 'trophy', stat: 'partyWins', goal: 3 },
   { id: 'velocista', name: 'Velocista', desc: 'Gana 5 carreras en línea', icon: 'flag', stat: 'raceWins', goal: 5 },
   { id: 'manos_rapidas', name: 'Manos rápidas', desc: 'Gana 3 batallas de monedas', icon: 'coin', stat: 'battleWins', goal: 3 },
   { id: 'sobreviviente', name: 'Sobreviviente', desc: 'Llega a la oleada 10 en Supervivencia', icon: 'shield', stat: 'survivalBest', goal: 10 },
@@ -1750,6 +1973,7 @@ function mpFinish() {
     if (game.coins > 0) submitScore('batalla', game.coins);
   }
   if (m.mode === 'survival' && m.wave > 0) { maxStat('survivalBest', m.wave); submitScore('supervivencia', m.wave); }
+  if (m.mode === 'party' && m.party) { const t = partyTable(true); s.score = m.party.pts[m.me] | 0; s.place = t.findIndex(x => x.uid === m.me) + 1; s.wins = m.party.wins[m.me] | 0; if (s.place === 1 && t.length >= 2) addStat('partyWins'); }
   if (window.SenaMP) SenaMP.levelDone(s);
 }
 
@@ -2029,11 +2253,14 @@ function pickQuestion() {
   const from = fresh.length ? fresh : failed.length ? failed : pool;
   return from[Math.floor(Math.random() * from.length)];
 }
-function openQuiz() {
-  const q = pickQuestion(); if (!q) { popCoin(player.x, player.y + 2); addCoinCount(); return; }
-  quiz.cur = q; quiz.open = true; quiz.answered = false; quiz.t = QUIZ_TIME;
+function openQuiz(opts = {}) {
+  const q = opts.q || pickQuestion(); if (!q) { popCoin(player.x, player.y + 2); addCoinCount(); return; }
+  quiz.opts = opts; quiz.limit = opts.time || QUIZ_TIME; quiz.t0 = performance.now();
+  quiz.cur = q; quiz.open = true; quiz.answered = false; quiz.t = quiz.limit;
   quiz.order = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
-  window.SENA_PAUSED = true; document.body.classList.add('quiz-open');
+  if (!opts.party) window.SENA_PAUSED = true;
+  document.body.classList.add('quiz-open');
+  document.querySelector('#quiz .qz-badge').textContent = opts.party ? 'DUELO ' + ((pState() || {}).quizI + 1) + ' DE 3' : 'PREGUNTA ADSO';
   document.getElementById('qzTopic').textContent = q.t;
   document.getElementById('qzQ').textContent = q.q;
   const code = document.getElementById('qzCode'); code.hidden = !q.code; code.textContent = q.code || '';
@@ -2048,7 +2275,7 @@ function openQuiz() {
   quizEl.classList.add('show');
   clearInterval(quiz.timer);
   quiz.timer = setInterval(() => {
-    quiz.t -= 0.1; document.getElementById('qzBar').style.width = Math.max(0, quiz.t / QUIZ_TIME * 100) + '%';
+    quiz.t -= 0.1; document.getElementById('qzBar').style.width = Math.max(0, quiz.t / quiz.limit * 100) + '%';
     if (quiz.t <= 0) answerQuiz(-1);
   }, 100);
 }
@@ -2060,12 +2287,15 @@ function answerQuiz(k) {
     b.disabled = true;
     if (quiz.order[i] === q.a) b.classList.add('right'); else if (i === k) b.classList.add('wrong');
   });
-  const seen = quizSeen(); seen[q.id] = right ? 1 : (seen[q.id] === 1 ? 1 : 0);
+  const party = quiz.opts && quiz.opts.party, ms = performance.now() - quiz.t0;
+  const seen = quizSeen(); if (!party) seen[q.id] = right ? 1 : (seen[q.id] === 1 ? 1 : 0);
   if (persist) try { localStorage.setItem(QUIZ_KEY, JSON.stringify(seen)); } catch (_) {}
   const feed = document.getElementById('qzFeed'); feed.hidden = false; feed.className = 'qz-feed ' + (right ? 'ok' : 'bad');
   document.getElementById('qzRes').textContent = right ? (quiz.streak >= 2 ? '¡Correcto! Racha de ' + (quiz.streak + 1) : '¡Correcto!') : k < 0 ? 'Se acabó el tiempo' : 'Casi...';
   document.getElementById('qzWhy').textContent = (right ? '' : 'La respuesta es: ' + q.o[q.a] + '. ') + q.why;
-  document.getElementById('qzPrize').textContent = right ? '+1 vida  ·  +1000 puntos  ·  energía llena' : 'No pierdes nada. ¡La próxima la sacas!';
+  document.getElementById('qzPrize').textContent = party ? (right ? 'Respondiste en ' + (ms / 1000).toFixed(1) + ' s' : '0 puntos en esta pregunta')
+    : right ? '+1 vida  ·  +1000 puntos  ·  energía llena' : 'No pierdes nada. ¡La próxima la sacas!';
+  if (party) { right ? SFX.oneup() : SFX.bump(); quiz.reward = false; const done = quiz.opts.onDone; setTimeout(() => { if (quiz.open) { closeQuiz(); done && done(right, ms); } }, 2600); return; }
   if (right) { quiz.streak++; SFX.oneup(); addStat('quizRight'); maxStat('quizStreak', quiz.streak); }
   else { quiz.streak = 0; SFX.bump(); }
   addStat('quizTotal');
@@ -2076,7 +2306,7 @@ function closeQuiz() {
   if (!quiz.open || !quiz.answered) return;
   quiz.open = false; quizEl.classList.remove('show'); document.body.classList.remove('quiz-open');
   for (const k in keys) keys[k] = false;   // que no siga caminando con una tecla que se soltó durante la pregunta
-  window.SENA_PAUSED = false;
+  if (!(quiz.opts && quiz.opts.party)) window.SENA_PAUSED = false;
   if (quiz.reward) {
     game.lives++; addScore(1000); game.energy = ENERGY_MAX;
     burstColor(player.x, player.y + 1.2, 0x7ff0ff, 50, 7); toast('+1 VIDA', 1200);
@@ -2088,7 +2318,7 @@ addEventListener('keydown', e => {
   e.stopImmediatePropagation(); e.preventDefault();
   const k = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, KeyA: 0, KeyB: 1, KeyC: 2, KeyD: 3, Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3 }[e.code];
   if (!quiz.answered && k != null) answerQuiz(k);
-  else if (quiz.answered && (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyJ')) closeQuiz();
+  else if (quiz.answered && !(quiz.opts && quiz.opts.party) && (e.code === 'Enter' || e.code === 'Space' || e.code === 'KeyJ')) closeQuiz();
 }, true);
 window.SENA_QUIZ = { open: openQuiz, answer: answerQuiz, close: closeQuiz, state: () => ({ open: quiz.open, answered: quiz.answered, id: quiz.cur && quiz.cur.id, right: quiz.cur && quiz.order.indexOf(quiz.cur.a) }) };
 
@@ -2188,13 +2418,15 @@ function showTitle(msg) {
 }
 
 function die() {
+  if (game.mp && game.mp.mode === 'party') { partyOut(); return; }
   if (player.dead || game.state !== 'play') return;
   player.dead = true; player.deadT = 0; player.vx = 0; player.vy = 0; player.pound = false; player.facing = 1; player.rot = 0;
   play('M_Death', { loop: false, fade: 0.05 }); SFX.die(); if (!game.mp) game.lives--; game.hurt = true;
 }
 // recibir daño: si es grande se encoge, si es pequeño muere
 function damage() {
-  if (player.ghost) return;
+  if (player.ghost || player.spect) return;
+  if (game.mp && game.mp.mode === 'party') { if (player.invT <= 0) partyOut(); return; }
   if (game.mp && game.mp.mode === 'battle') {
     if (player.invT > 0) return;
     const n = Math.min(3, game.coins); game.coins -= n; player.invT = 1.6; shake = 0.25; SFX.shrink();
@@ -2662,6 +2894,7 @@ function approach(v, t, d) { return v < t ? Math.min(v + d, t) : Math.max(v - d,
 
 function updatePlayer(dt) {
   const p = player;
+  if (p.spect) { p.vx = p.vy = 0; p.x += ((levelSpec(game.level).W / 2) - p.x) * Math.min(1, dt * 2); p.y = 10; if (model) model.visible = false; return; }
   if (p.ghost) { updateGhost(dt); return; }
   if (p.dead) {
     p.deadT += dt;
@@ -3408,7 +3641,7 @@ Promise.all(enemyEntries.map(name =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), specAt: (w, i) => levelSpec(i, w), blockMat: (x, y) => { const m = blockMesh[x + ',' + y]; return m ? (m.material === MAT.quiz ? 'quiz' : m.material === MAT.question ? 'question' : 'otro') : null; }, gridAt: (x, y) => grid[x] && grid[x][y], boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
+  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), specAt: (w, i) => levelSpec(i, w), partyRound, blockMat: (x, y) => { const m = blockMesh[x + ',' + y]; return m ? (m.material === MAT.quiz ? 'quiz' : m.material === MAT.question ? 'question' : 'otro') : null; }, gridAt: (x, y) => grid[x] && grid[x][y], boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
     remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName, cos: r.cos || '' })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
