@@ -13,9 +13,11 @@ const edit = (f, fn) => { const s = readFileSync(f, 'utf8'), r = fn(s); if (r ==
 const pkgDir = join(SRC, 'java', 'com', 'senabros', 'game'); mkdirSync(pkgDir, { recursive: true });
 cpSync(join(here, 'native', 'ApkUpdaterPlugin.java'), join(pkgDir, 'ApkUpdaterPlugin.java'));
 cpSync(join(here, 'native', 'MainActivity.java'), join(pkgDir, 'MainActivity.java'));
+cpSync(join(here, 'native', 'InstallReceiver.java'), join(pkgDir, 'InstallReceiver.java'));
 
 // 2) Permisos y pantalla horizontal
 edit(join(SRC, 'AndroidManifest.xml'), s => {
+  if (!s.includes('InstallReceiver')) s = s.replace('</application>', '    <receiver android:name=".InstallReceiver" android:exported="false" />\n    </application>');
   if (!s.includes('REQUEST_INSTALL_PACKAGES')) s = s.replace('</manifest>', '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>');
   const link = '<intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="senabros" android:host="auth" />\n            </intent-filter>\n        </activity>';
   return s.replace('<activity', '<activity\n            android:screenOrientation="sensorLandscape"').replace('</activity>', link);

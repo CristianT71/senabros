@@ -1,8 +1,10 @@
 package com.senabros.game;
 
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -17,8 +19,10 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -148,10 +152,12 @@ public class ApkUpdaterPlugin extends Plugin {
         }).start();
     }
 
+    // Instala con una sesión de PackageInstaller: el APK se copia al sistema ANTES de abrir el instalador, así la instalación
+    // no depende de que esta app siga "despierta" (Android congela las apps en segundo plano y el instalador se quedaba en "Instalando...").
     @PluginMethod
-    public void install(PluginCall call) {
-        Context ctx = getContext();
-        File f = apkFile();
+    public void install(final PluginCall call) {
+        final Context ctx = getContext();
+        final File f = apkFile();
         if (!f.exists()) { call.reject("nofile"); return; }
         if (Build.VERSION.SDK_INT >= 26 && !ctx.getPackageManager().canRequestPackageInstalls()) {
             Intent s = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.getPackageName()));
@@ -160,11 +166,39 @@ public class ApkUpdaterPlugin extends Plugin {
             call.reject("permission", "permission");
             return;
         }
-        Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", f);
-        Intent i = new Intent(Intent.ACTION_VIEW);
-        i.setDataAndType(uri, "application/vnd.android.package-archive");
-        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-        ctx.startActivity(i);
-        call.resolve();
+        new Thread(() -> {
+            try {
+                PackageInstaller pi = ctx.getPackageManager().getPackageInstaller();
+                PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+                params.setAppPackageName(ctx.getPackageName());
+                if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
+                int id = pi.createSession(params);
+                PackageInstaller.Session session = pi.openSession(id);
+                try (InputStream in = new FileInputStream(f); OutputStream out = session.openWrite("SenaBros.apk", 0, f.length())) {
+                    byte[] buf = new byte[65536];
+                    int n;
+                    while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                    session.fsync(out);
+                }
+                Intent result = new Intent(ctx, InstallReceiver.class);
+                int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+                PendingIntent pending = PendingIntent.getBroadcast(ctx, id, result, flags);
+                session.commit(pending.getIntentSender());
+                session.close();
+                call.resolve();
+            } catch (Exception e) {
+                // si la sesión falla, se usa el instalador clásico
+                try {
+                    Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", f);
+                    Intent i = new Intent(Intent.ACTION_VIEW);
+                    i.setDataAndType(uri, "application/vnd.android.package-archive");
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(i);
+                    call.resolve();
+                } catch (Exception e2) {
+                    call.reject("install: " + e2.getMessage());
+                }
+            }
+        }).start();
     }
 }
