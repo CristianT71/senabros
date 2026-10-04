@@ -30,16 +30,21 @@ jobs:
         run: echo "APP_VERSION=${VERSION#v}" >> "$GITHUB_ENV"
       - name: Preparar el juego
         run: node apps/build-www.mjs
-      - name: Compilar e instalador de Windows
+      - name: Compilar el instalador de Windows
         working-directory: apps/desktop
         shell: bash
         run: |
           npm ci --no-audit --no-fund
           npm version "$APP_VERSION" --no-git-tag-version --allow-same-version
-          npx electron-builder --win --publish always
+          npx electron-builder --win --publish never
+      - name: Crear la versión y subir los archivos (un solo release)
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EP_GH_IGNORE_TIME: 'true'
+        run: |
+          TAG="v${APP_VERSION}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "SENA Bros $APP_VERSION" --notes "Versión $APP_VERSION"
+          gh release upload "$TAG" apps/desktop/dist/SenaBros-Setup.exe apps/desktop/dist/SenaBros-Setup.exe.blockmap apps/desktop/dist/latest.yml --clobber
 
   android:
     runs-on: ubuntu-latest
