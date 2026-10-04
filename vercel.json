@@ -39,29 +39,12 @@
           "value": "application/manifest+json"
         }
       ]
-    },
-    {
-      "source": "/descargar/(.*)",
-      "headers": [
-        {
-          "key": "Content-Disposition",
-          "value": "attachment"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=300"
-        }
-      ]
     }
   ],
   "rewrites": [
     {
-      "source": "/descargar/SenaBros-Setup.exe",
-      "destination": "https://github.com/CristianT71/senabros/releases/latest/download/SenaBros-Setup.exe"
-    },
-    {
-      "source": "/descargar/SenaBros.apk",
-      "destination": "https://github.com/CristianT71/senabros/releases/latest/download/SenaBros.apk"
+      "source": "/descargar/:f",
+      "destination": "/api/descargar?f=:f"
     }
   ]
 }
