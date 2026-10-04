@@ -24,7 +24,7 @@ if (kind === 'windows') desk.onAuthUrl && desk.onAuthUrl(onAuth); else if (Apk) 
 const newer = (a, b) => { const x = String(a).replace(/^v/, '').split('.').map(Number), y = String(b).replace(/^v/, '').split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] | 0) !== (y[i] | 0)) return (x[i] | 0) > (y[i] | 0); } return false; };
 
 // ---------- Ventana de actualización ----------
-let box = null, cur = null, busy = false, fromUser = false;
+let box = null, cur = null, busy = false, fromUser = false, dismissed = null, lastCheck = 0;
 function build() {
   if (box) return box;
   box = el('div', { id: 'updBox', hidden: '' }, el('div', { class: 'upd-card' },
@@ -32,7 +32,7 @@ function build() {
     el('h3', { id: 'updTitle' }, 'Nueva versión disponible'),
     el('p', { id: 'updText' }),
     el('div', { id: 'updBar', hidden: '' }, el('div', { class: 'upd-track' }, el('i', { id: 'updFill' })), el('div', { class: 'upd-line' }, el('b', { id: 'updPct' }, '0%'), el('span', { id: 'updInfo' }))),
-    el('div', { class: 'upd-btns' }, el('button', { id: 'updGo', type: 'button', class: 'go', onclick: start }, 'ACTUALIZAR AHORA'), el('button', { id: 'updLater', type: 'button', class: 'later', onclick: () => { box.hidden = true; chip(); } }, 'Después'))));
+    el('div', { class: 'upd-btns' }, el('button', { id: 'updGo', type: 'button', class: 'go', onclick: start }, 'ACTUALIZAR AHORA'), el('button', { id: 'updLater', type: 'button', class: 'later', onclick: () => { box.hidden = true; dismissed = cur && cur.version; chip(); } }, 'Después'))));
   document.body.append(box); return box;
 }
 function chip() {
@@ -71,20 +71,20 @@ async function start() {
   }
 }
 async function check(manual) {
-  fromUser = !!manual; if (busy) return;
+  fromUser = !!manual; if (busy) return; lastCheck = Date.now();
   try {
     if (kind === 'windows') return await desk.check();
     if (kind !== 'android') return;
     const r = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
     if (!r.ok) throw 0;
     const j = await r.json(), asset = (j.assets || []).find(a => a.name === FILES.android);
-    if (asset && newer(j.tag_name, APP.version)) { cur = { version: String(j.tag_name).replace(/^v/, ''), url: asset.browser_download_url, size: asset.size }; manual || !launched ? (launched = true, show()) : chip(); }
+    if (asset && newer(j.tag_name, APP.version)) { cur = { version: String(j.tag_name).replace(/^v/, ''), url: asset.browser_download_url, size: asset.size }; (manual || (!launched && cur.version !== dismissed)) ? (launched = true, show()) : chip(); }
     else if (manual) toast('Ya tienes la última versión (' + APP.version + ')');
   } catch (_) { if (manual) toast('No se pudo buscar actualizaciones'); }
 }
 let launched = false;
 if (kind === 'windows') desk.onUpdate(d => {
-  if (d.state === 'available') { cur = { version: d.version }; (!launched || fromUser) ? (launched = true, show()) : chip(); }
+  if (d.state === 'available') { cur = { version: d.version }; (fromUser || (!launched && d.version !== dismissed)) ? (launched = true, show()) : chip(); }
   else if (d.state === 'none') { if (fromUser) toast('Ya tienes la última versión (' + APP.version + ')'); }
   else if (d.state === 'progress') progress(d.percent, mb(d.done) + ' / ' + mb(d.total) + ' MB');
   else if (d.state === 'ready') { progress(100, 'Listo'); $('updTitle').textContent = 'Instalando'; $('updText').textContent = 'El juego se va a reiniciar solo.'; setTimeout(() => desk.install(), 900); }
@@ -122,6 +122,10 @@ function promo() {
   if (kind === 'windows') APP.version = desk.version;
   else if (kind === 'android') { try { APP.version = (await Apk.info()).version; } catch (_) { APP.version = '1.0.0'; } }
   settingsBox(); promo();
-  if (APP.native) { setTimeout(() => check(false), 3000); setInterval(() => { if (!busy) check(false); }, 20 * 60 * 1000); }
+  if (APP.native) {
+    setTimeout(() => check(false), 3000); setInterval(() => { if (!busy) check(false); }, 5 * 60 * 1000);
+    // Android congela los temporizadores con la app en segundo plano: al volver se revisa de nuevo (y se vuelve a mostrar la ventana)
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !busy && Date.now() - lastCheck > 30000) { launched = false; check(false); } });
+  }
 })();
 })();
