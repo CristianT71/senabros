@@ -919,7 +919,7 @@ function updateBoss(e, dt) {
   const angry = (e.maxHp - e.hp) * 3 / e.maxHp;
   if (e.ground) {
     e.bt -= dt; e.dir = Math.sign(dx) || e.dir;
-    if (e.bt <= 0) { e.vy = 16 + angry; e.jvx = Math.sign(dx) * Math.min(5 + angry, Math.abs(dx) * 1.2); e.bt = 2.3 - angry * 0.45; SFX.jump(); if (e.def.hp === 5) strikeAt(p.x, 1.1); }   // el Bug Supremo llama rayos
+    if (e.bt <= 0) { e.vy = 16 + angry; e.jvx = Math.sign(dx) * Math.min(5 + angry, Math.abs(dx) * 1.2); e.bt = 2.3 - angry * 0.45; SFX.jump(); if (e.def.strikes) { strikeAt(p.x, 1.1); if (e.def.strikes > 1) strikeAt(p.x + (Math.random() < 0.5 ? -3 : 3), 1.4); } }   // los últimos jefes llaman rayos
     else moveX(e, e.dir * (1.3 + angry * 0.7) * dt);
   } else if (moveX(e, e.jvx * dt)) e.jvx = 0;
   const wasG = e.ground, r = moveY(e, e.vy * dt);
@@ -947,6 +947,7 @@ function bossDefeated() {
   const L = levelSpec(game.level);
   if (!netMute) addStat('bossKills');
   const bossName = (bossE && bossE.def.name) || 'BUG REY';
+  if (game.mp && game.mp.mode === 'jefes') setTimeout(jefesNext, 50);
   if (L.bossWall == null) { bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8; toast('¡' + bossName + ' DERROTADO!', 2600); return; }
   bossBar.classList.remove('on'); addScore(5000); SFX.oneup(); shake = 0.8;
   toast('¡BUG REY DERROTADO!', 2600);
@@ -992,7 +993,8 @@ const ENEMY_TYPES = {
   'robot-entrega-tardia': { scale: 1.35, speed: 1.0, hw: 0.38, h: 1.25, kind: 'charger', score: 200 },
   'archivo-corrupto':     { scale: 1.2,  speed: 1.5, hw: 0.5,  h: 1.1,  kind: 'flyer',   score: 300 },
   'boss':                 { scale: 3.1,  speed: 1.4, hw: 1.3,  h: 2.75, kind: 'boss',    score: 5000, tmpl: 'archivo-corrupto' },
-  'boss2':                { scale: 3.4,  speed: 1.7, hw: 1.45, h: 3.0,  kind: 'boss',    score: 8000, tmpl: 'robot-entrega-tardia', hp: 5, name: 'BUG SUPREMO', tint: [0.55, 0.6, 1.35], glow: 0x22106a },
+  'boss2':                { scale: 3.4,  speed: 1.7, hw: 1.45, h: 3.0,  kind: 'boss',    score: 8000, tmpl: 'robot-entrega-tardia', hp: 5, name: 'BUG SUPREMO', tint: [0.55, 0.6, 1.35], glow: 0x22106a, strikes: 1 },
+  'boss3':                { scale: 3.9,  speed: 2.1, hw: 1.6,  h: 3.4,  kind: 'boss',    score: 12000, tmpl: 'robot-404', hp: 7, name: 'MEGA BUG', tint: [1.5, 0.35, 0.3], glow: 0x6a0000, strikes: 2 },
 };
 const ENEMY_SPAWNS = [
   [22, 2, 'robot-404'], [34, 2, 'robot-entrega-tardia'], [45, 6, 'archivo-corrupto'],
@@ -1148,6 +1150,7 @@ const MODE_EVENTS = {   // qué se comparte en cada modo (en equipo se comparte 
   battle: new Set(['cspawn', 'cgrab', 'stomp', 'loot', 'emote']),
   survival: new Set(['kill', 'boss', 'wave', 'revive', 'emote']),
   party: new Set(['pround', 'pres', 'pcrown', 'stomp', 'pbomb', 'pboom', 'pgrab', 'ppush', 'kill', 'emote']),
+  jefes: new Set(['boss', 'revive', 'emote']),
 };
 function net(type, payload) {
   if (!game.mp || netMute || !window.SENA_NET) return;
@@ -1335,7 +1338,7 @@ function localNetState() {
 }
 function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}], me }
   stopMP();
-  const mode = ['race', 'battle', 'survival', 'party'].includes(opts.mode) ? opts.mode : 'coop';
+  const mode = ['race', 'battle', 'survival', 'party', 'jefes'].includes(opts.mode) ? opts.mode : 'coop';
   game.mp = { me: opts.me, mode, order: [], finished: false, sent: false, t0: performance.now(), raceLeft: 0, names: {},
     ids: (opts.order || []).slice(), battleLeft: 120, wave: 0, waveBreak: 2.5, coinT: 1, bcoins: new Map(), nextCoin: 0, over: false };
   opts.players.forEach(q => { game.mp.names[q.uid] = q.name; });
@@ -1343,20 +1346,22 @@ function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}]
   Object.assign(game, { score: 0, coins: 0, lives: 3, energy: 0, challenge: null });
   game.world = opts.world - 1; MAPN = WORLDS[game.world].nodes;
   if (mode === 'battle' || mode === 'survival') { game.arena = arenaSpec(mode); startLevel(-1); }
+  else if (mode === 'jefes') { game.mp.jefes = { phase: 0, state: 'intro', t: 3.5, cleared: 0, t0: performance.now() }; game.arena = jefesArena(0); startLevel(-1); }
   else if (mode === 'party') { game.arena = partyArena('duelo'); game.arena.name = 'Fiesta de minijuegos'; startLevel(-1); partyInit(); }
   else { game.arena = null; startLevel(opts.level - 1); }
   // cada jugador sale en un punto distinto (antes salían todos encima y se quedaban pegados)
   const idx = Math.max(0, game.mp.ids.indexOf(opts.me)), n = Math.max(1, game.mp.ids.length);
   const sx = game.arena ? 6 + idx * ((game.arena.W - 12) / Math.max(1, n - 1 || 1)) : 3 + idx * 1.1;
   player.x = player.safeX = sx; game.checkpoint = sx;
-  worldLabel.textContent = { race: 'CARRERA', battle: 'BATALLA', survival: 'SUPERVIVENCIA', party: 'FIESTA' }[mode] || 'EN EQUIPO';
+  worldLabel.textContent = { race: 'CARRERA', battle: 'BATALLA', survival: 'SUPERVIVENCIA', party: 'FIESTA', jefes: 'JEFES' }[mode] || 'EN EQUIPO';
+  if (mode === 'jefes') jefesPlace();
   document.body.classList.add('mplevel'); document.body.classList.toggle('race', mode !== 'coop');
 }
 function stopMP() {
   [...remotes.keys()].forEach(removeRemote);
   if (player.ghost) endGhost();
   chatBubbles.splice(0).forEach(b => scene.remove(b.obj));
-  document.body.classList.remove('mplevel', 'race'); game.arena = null; player.spect = false; partyBox.hidden = true; document.getElementById('pLight').hidden = true; if (quiz.open) { quiz.answered = true; closeQuiz(); } if (game.level < 0) { game.level = 0; buildLevel(); } ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
+  document.body.classList.remove('mplevel', 'race', 'bossfight'); game.arena = null; player.spect = false; partyBox.hidden = true; document.getElementById('pLight').hidden = true; if (quiz.open) { quiz.answered = true; closeQuiz(); } if (game.level < 0) { game.level = 0; buildLevel(); } ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
   game.mp = null;
 }
 window.SENA_MP = {
@@ -1493,7 +1498,7 @@ function setModelOpacity(m, a) {
   });
 }
 function teammates() { const now = performance.now(); return [...remotes.values()].filter(r => r.has && now - r.last < 6000); }
-function canBeRevived() { return !!game.mp && (game.mp.mode === 'coop' || game.mp.mode === 'survival') && teammates().length > 0; }
+function canBeRevived() { return !!game.mp && (game.mp.mode === 'coop' || game.mp.mode === 'survival' || game.mp.mode === 'jefes') && teammates().length > 0; }
 function becomeGhost() {
   const p = player;
   p.dead = false; p.ghost = true; p.ghostT = 20; p.vx = p.vy = 0; p.pound = false;
@@ -1522,6 +1527,7 @@ function updateGhost(dt) {
   const mates = teammates();
   teamDownT = mates.length && mates.every(r => r.ghost || r.dead) ? teamDownT + dt : 0;
   if (teamDownT > 1.2 && game.mp && game.mp.mode === 'survival') { teamDownT = 0; survivalOver(); return; }
+  if (teamDownT > 1.2 && game.mp && game.mp.mode === 'jefes') { teamDownT = 0; jefesOver(false); return; }
   if (teamDownT > 1.2) { teamDownT = 0; toast('Equipo caído. Vuelven al checkpoint', 2200); endGhost(); resetPlayer(game.checkpoint); p.invT = 2; return; }
   if (p.ghostT <= 0 || !mates.length) { endGhost(); resetPlayer(game.checkpoint); p.invT = 2; return; }
 }
@@ -1615,6 +1621,7 @@ function updateMpFx(dt) {
   else if (md === 'race') { raceContacts(dt); updateRaceHud(dt); }
   else if (md === 'battle') { raceContacts(dt); updateBattle(dt); }
   else if (md === 'survival') { checkRevives(dt); updateSurvival(dt); }
+  else if (md === 'jefes') { checkRevives(dt); updateJefes(dt); }
   else if (md === 'party') { const P = pState(); if (P && P.phase === 'play' && P.g !== 'duelo') raceContacts(dt); updateParty(dt); updateScoreHud('pv', dt); }
 }
 
@@ -1984,6 +1991,63 @@ function partyFinal() {
 const PARTY_WARN = new T.MeshStandardMaterial({ color: 0xff3a3a, emissive: 0x8a0000, emissiveIntensity: 0.6 });
 window.SENA_PARTY = { state: () => { const P = pState(); return P ? { r: P.r, g: P.g, phase: P.phase, val: P.val, pts: P.pts, list: P.list, out: P.out, crown: P.crown } : null; } };
 
+
+// ================= Modo Jefes (en línea): 3 jefes seguidos en equipo =================
+const JEFES = [
+  { type: 'boss', name: 'BUG REY', theme: 'fortress', bg: 'fortress', style: 'fortress' },
+  { type: 'boss2', name: 'BUG SUPREMO', theme: 'skyfort', bg: 'skycastle', style: 'skyfort' },
+  { type: 'boss3', name: 'MEGA BUG', theme: 'storm', bg: 'storm', style: 'cloud' },
+];
+function jefesArena(i) {
+  const W = 40, solid = [], J = JEFES[i];
+  for (let y = 2; y < 14; y++) solid.push([0, y], [1, y], [W - 2, y], [W - 1, y]);
+  const plat = (a, b, y) => { for (let x = a; x <= b; x++) solid.push([x, y]); };
+  plat(6, 10, 5); plat(29, 33, 5); plat(16, 23, 8);
+  return { name: 'Jefe ' + (i + 1) + ': ' + J.name, theme: J.theme, bg: J.bg, style: J.style, gaps: [], blocks: [[12, 5, 'M'], [27, 5, 'M']], solid, pipes: [], coins: [],
+    plats: [], fires: [], cannons: [], springs: [3.5, 36.5], enemies: [], belts: [], bolts: [], flagX: W + 60, W, time: 999, checkpoint: 999, deathY: -3 };
+}
+function jefesPlace() {   // cada uno en su lugar al empezar cada jefe
+  const idx = Math.max(0, game.mp.ids.indexOf(game.mp.me)), n = Math.max(2, game.mp.ids.length);
+  player.x = player.safeX = 4 + idx * (8 / (n - 1)); player.y = 2; game.checkpoint = player.x;
+}
+function jefesGo(i) {
+  const J = game.mp.jefes; J.phase = i; J.state = 'intro'; J.t = 3.5;
+  game.arena = jefesArena(i); startLevel(-1); jefesPlace();
+  if (player.ghost) reviveSelf(null, true);
+}
+function updateJefes(dt) {
+  const J = game.mp.jefes; if (!J || J.state === 'over') return;
+  J.t -= dt; const B = JEFES[J.phase];
+  document.body.classList.toggle('bossfight', bossBar.classList.contains('on'));
+  if (J.state === 'intro') {
+    raceTimer.hidden = false; raceTimer.textContent = 'Jefe ' + (J.phase + 1) + ' de 3: ' + B.name + '  en ' + Math.max(1, Math.ceil(J.t));
+    if (J.t <= 0) {
+      addEnemy(game.arena.W - 9, 2, B.type);
+      const e = enemies[enemies.length - 1], n = 1 + teammates().length;
+      e.uid = 'J' + J.phase; e.active = true; e.hp = e.maxHp = e.def.hp + (B.type === 'boss3' ? 3 : 2) * (n - 1);
+      J.state = 'fight'; SFX.bosshit(); shake = 0.6; toast('¡' + B.name + '!', 1600);
+    }
+  } else if (J.state === 'fight') {
+    raceTimer.textContent = 'Jefe ' + (J.phase + 1) + ' de 3: ' + B.name + '   ' + fmtTime((performance.now() - J.t0) / 1000);
+  } else if (J.state === 'clear' && J.t <= 0) {
+    if (J.phase + 1 >= JEFES.length) jefesOver(true); else jefesGo(J.phase + 1);
+  }
+}
+function jefesNext() {   // jefe vencido: unos segundos de celebración y al siguiente
+  const J = game.mp && game.mp.jefes; if (!J || J.state !== 'fight') return;
+  J.state = 'clear'; J.t = 4.5; J.cleared++;
+  if (player.ghost) reviveSelf(null, true);
+  raceTimer.textContent = J.cleared >= JEFES.length ? '¡Vencieron a los 3 jefes!' : '¡' + JEFES[J.phase].name + ' derrotado! Viene el siguiente...';
+}
+function jefesOver(win) {
+  const m = game.mp, J = m && m.jefes; if (!J || J.state === 'over') return;
+  J.state = 'over'; J.win = win; J.time = (performance.now() - J.t0) / 1000;
+  endGhost(); SFX[win ? 'win' : 'die']();
+  toast(win ? '¡EQUIPO CAMPEÓN! Vencieron a los 3 jefes' : 'Cayó el equipo en el jefe ' + (J.phase + 1), 3000);
+  if (win) { burstColor(player.x, player.y + 2, 0xffd23f, 80, 10); addStat('bossRushWins'); }
+  if (!m.sent) { m.sent = true; setTimeout(mpFinish, 2800); }
+}
+
 // ================= Arenas para Batalla de monedas y Supervivencia =================
 function arenaSpec(kind) {
   const W = 46, solid = [], blocks = [];
@@ -2129,6 +2193,7 @@ const ACHIEVEMENTS = [
   { id: 'intocable', name: 'Intocable', desc: 'Completa un nivel sin recibir daño', icon: 'shield', stat: 'flawless', goal: 1 },
   { id: 'poder_total', name: 'Poder total', desc: 'Desbloquea los 7 poderes', icon: 'bolt', get: () => Object.values(powerData).filter(d => d.unlocked).length, goal: 7 },
   { id: 'fiestero', name: 'Rey de la fiesta', desc: 'Gana 3 fiestas de minijuegos', icon: 'trophy', stat: 'partyWins', goal: 3 },
+  { id: 'cazajefes', name: 'Cazajefes', desc: 'Vence a los 3 jefes en el modo Jefes', icon: 'crown', stat: 'bossRushWins', goal: 1 },
   { id: 'velocista', name: 'Velocista', desc: 'Gana 5 carreras en línea', icon: 'flag', stat: 'raceWins', goal: 5 },
   { id: 'manos_rapidas', name: 'Manos rápidas', desc: 'Gana 3 batallas de monedas', icon: 'coin', stat: 'battleWins', goal: 3 },
   { id: 'sobreviviente', name: 'Sobreviviente', desc: 'Llega a la oleada 10 en Supervivencia', icon: 'shield', stat: 'survivalBest', goal: 10 },
@@ -2160,6 +2225,7 @@ function mpFinish() {
     if (game.coins > 0) submitScore('batalla', game.coins);
   }
   if (m.mode === 'survival' && m.wave > 0) { maxStat('survivalBest', m.wave); submitScore('supervivencia', m.wave); }
+  if (m.mode === 'jefes' && m.jefes) { s.wave = m.jefes.cleared; s.time = Math.round(m.jefes.time || 0); s.place = m.jefes.win ? 1 : 0; }
   if (m.mode === 'party' && m.party) { const t = partyTable(true); s.score = m.party.pts[m.me] | 0; s.place = t.findIndex(x => x.uid === m.me) + 1; s.wins = m.party.wins[m.me] | 0; if (s.place === 1 && t.length >= 2) addStat('partyWins'); }
   if (window.SenaMP) SenaMP.levelDone(s);
 }
@@ -2619,6 +2685,7 @@ function pickMusic() {
   else if (st === 'play' || st === 'win') {
     const md = game.mp && game.mp.mode;
     if (md === 'party' || md === 'battle') want = 'party';
+    else if (md === 'jefes') want = 'boss';
     else if (md === 'race') want = 'race';
     else if (md === 'survival' || (bossE && bossE.alive)) want = 'boss';
     else if (game.custom) { const th = game.custom.spec.theme; want = th === 'lava' ? 'w2' : ['sky', 'icesky', 'storm', 'datahwy'].includes(th) ? 'w3' : 'w1'; }
@@ -2950,6 +3017,7 @@ function grow() {
 }
 function afterDeath() {
   if (game.mp && game.mp.mode === 'survival') { survivalOver(); return; }
+  if (game.mp && game.mp.mode === 'jefes') { jefesOver(false); return; }
   if (game.mp) { resetPlayer(game.checkpoint); player.invT = 2; return; }
   if (game.custom && game.lives <= 0) { exitCustom({ lost: true }); return; }
   if (game.lives <= 0) recordBest();

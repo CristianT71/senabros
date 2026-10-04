@@ -13,7 +13,8 @@ const MODES = {
   race: { label: 'Carrera', hud: 'CARRERA', desc: 'Carrera (el primero en llegar gana)' },
   battle: { label: 'Batalla de monedas', hud: 'BATALLA DE MONEDAS', desc: 'Batalla de monedas (2 minutos, gana quien junte más)', arena: true },
   survival: { label: 'Supervivencia', hud: 'SUPERVIVENCIA', desc: 'Supervivencia (aguanten oleadas de bugs en equipo)', arena: true },
-  party: { label: 'Fiesta de minijuegos', hud: 'FIESTA DE MINIJUEGOS', desc: 'Fiesta: 4 minijuegos al azar y podio final', arena: true },
+  party: { label: 'Fiesta de minijuegos', hud: 'FIESTA DE MINIJUEGOS', desc: 'Fiesta: 5 minijuegos al azar y podio final', arena: true },
+  jefes: { label: 'Jefes', hud: 'JEFES', desc: 'Jefes: venzan juntos al Bug Rey, al Bug Supremo y al Mega Bug', arena: true },
 };
 const modeOf = m => MODES[m] || MODES.coop;
 const MAX = 4, RATE = 100, ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -99,6 +100,14 @@ function renderResults() {
   if (!r || !r.rows.size) { box.hidden = true; return; }
   box.hidden = false;
   const again = isHost() && !st.players.some(p => p.st === 'play') ? el('button', { type: 'button', class: 'go small revancha', onclick: () => { st.mode = r.mode || st.mode; track('lobby'); startGame(); } }, 'REVANCHA') : null;
+  if (r.mode === 'jefes') {
+    const rows = [...r.rows.values()].sort((a, b) => b.score - a.score), x0 = rows[0] || {};
+    const head = x0.place ? '¡Vencieron a los 3 jefes en ' + Math.floor(x0.time / 60) + ':' + String(x0.time % 60).padStart(2, '0') + '!' : 'Llegaron hasta el jefe ' + Math.min(3, (x0.wave | 0) + 1);
+    box.replaceChildren(el('div', { class: 'ptitle' }, 'Resultados ' + r.label + '  -  ' + head),
+      el('div', { class: 'rtable' }, el('div', { class: 'rh' }, el('span', {}, 'Jugador'), el('span', {}, 'Jefes'), el('span', {}, 'Bugs'), el('span', {}, 'Puntos')),
+        ...rows.map((x, i) => el('div', { class: 'rr' + (i === 0 ? ' first' : '') }, el('span', {}, x.n), el('span', {}, (x.wave | 0) + ' / 3'), el('span', {}, String(x.kills)), el('span', {}, x.score.toLocaleString('es'))))), again);
+    return;
+  }
   if (r.mode === 'party') {
     const rows = [...r.rows.values()].sort((a, b) => (a.place || 99) - (b.place || 99) || b.score - a.score);
     box.replaceChildren(el('div', { class: 'ptitle' }, 'Resultados ' + r.label),

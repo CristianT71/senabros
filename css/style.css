@@ -1146,3 +1146,11 @@ body.touch #tuto { top: 64px; }
 .gr-msg { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 13px; } .gr-msg b { color: var(--gold); } .gr-msg.mine b { color: #39d98a; }
 .gr-msg span { overflow-wrap: anywhere; } .gr-msg small { margin-left: auto; font-size: 10px; color: #8fb3a0; }
 @media (max-width: 760px), (max-height: 520px) { .gr-body { grid-template-columns: 1fr; } .gr-chat { height: 160px; } .gr-board { max-height: 180px; } }
+
+#mpRoom .modes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#mpModeParty { grid-column: auto; }
+@media (max-width: 900px) { #mpRoom .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-height: 520px) { #mpRoom .modes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+body.bossfight #raceTimer { top: 118px; }
+@media (max-height: 520px) { body.bossfight #raceTimer { top: 96px; } }
