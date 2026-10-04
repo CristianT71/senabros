@@ -25,6 +25,7 @@ edit(join(SRC, 'AndroidManifest.xml'), s => {
 edit(join(A, 'build.gradle'), s => {
   s = s.replace(/versionCode\s*=?\s*\d+/, 'versionCode ' + code).replace(/versionName\s*=?\s*"[^"]*"/, 'versionName "' + version + '"');
   s = s.replace(/android\s*\{/, 'android {\n    signingConfigs {\n        release {\n            storeFile file("../../senabros.keystore")\n            storePassword "senabros2026"\n            keyAlias "senabros"\n            keyPassword "senabros2026"\n        }\n    }');
+  s = s.replace(/dependencies\s*\{/, 'dependencies {\n    implementation "androidx.browser:browser:1.8.0"');
   return s.replace(/(buildTypes\s*\{\s*release\s*\{)/, '$1\n            signingConfig signingConfigs.release');
 });
 

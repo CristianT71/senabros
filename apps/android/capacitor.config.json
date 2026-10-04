@@ -4,5 +4,5 @@
   "webDir": "../www",
   "backgroundColor": "#0b1d0a",
   "server": { "androidScheme": "https" },
-  "android": { "allowMixedContent": false }
+  "android": { "allowMixedContent": false, "adjustMarginsForEdgeToEdge": "force" }
 }

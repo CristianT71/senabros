@@ -3826,6 +3826,9 @@ function updatePowerups(dt) {
 }
 
 let camX = 8, camY = 6;
+// En celulares (pantalla baja) la cámara se acerca para que el personaje se vea más grande
+let camZ = 1;
+function camZoom() { camZ += ((MOBILE && innerHeight < 560 ? 0.6 : 1) - camZ) * 0.2; return camZ; }
 function update(dt) {
   if (game.state === 'map') {
     updateMap(dt);
@@ -3891,12 +3894,13 @@ function update(dt) {
     updateBackdrop(player.x - 1.5, player.y + 1.6);
     return;
   }
-  const tx = Math.max(7, Math.min(W - 7, player.x + player.facing * 2.2));
+  const zm = camZoom(), edge = zm < 1 ? 5.2 : 7, tx = Math.max(edge, Math.min(W - edge, player.x + player.facing * (zm < 1 ? 3.2 : 2.2)));
   camX += (tx - camX) * Math.min(1, dt * 3.5);
-  const ty = Math.max(4.6, Math.min(levelSpec(game.level).cave ? 6.8 : 10, player.y + 2.1));
+  const zoom = zm;
+  const ty = Math.max(zoom < 1 ? 3.7 : 4.6, Math.min(levelSpec(game.level).cave ? 6.8 : 10, player.y + (zoom < 1 ? 1.7 : 2.1)));
   camY += (ty - camY) * Math.min(1, dt * 3);
   shake *= Math.exp(-8 * dt);
-  camera.position.set(camX + (Math.random() - 0.5) * shake, camY + 0.8 + (Math.random() - 0.5) * shake, 10.5);
+  camera.position.set(camX + (Math.random() - 0.5) * shake, camY + 0.8 * zoom + (Math.random() - 0.5) * shake, 10.5 * zoom);
   camera.lookAt(camX, camY, 0);
   sun.position.set(camX + 6, 16, 12); sun.target.position.set(camX, 2, 0);
   updateBackdrop(camX, camY);

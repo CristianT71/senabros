@@ -6,6 +6,7 @@ import android.content.pm.PackageInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -47,9 +48,15 @@ public class ApkUpdaterPlugin extends Plugin {
     public void openUrl(PluginCall call) {
         String url = call.getString("url");
         if (url == null || !url.startsWith("https://")) { call.reject("url"); return; }
-        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        getContext().startActivity(i);
+        try {
+            // Pestaña del navegador dentro de la app (Chrome Custom Tabs): Google se abre encima del juego
+            CustomTabsIntent tab = new CustomTabsIntent.Builder().setShowTitle(true).build();
+            tab.launchUrl(getActivity(), Uri.parse(url));
+        } catch (Exception e) {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+        }
         call.resolve();
     }
 
