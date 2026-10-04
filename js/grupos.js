@@ -49,7 +49,7 @@ function renderBoard() {
   const me = SenaOnline.user && SenaOnline.user.id;
   $('grBoard').replaceChildren(...rows.map((r, i) => el('div', { class: 'gr-row clickable' + (r.user_id === me ? ' me' : '') + (i < 3 ? ' t' + (i + 1) : ''), 'data-profile': r.user_id, title: 'Ver perfil' },
     el('span', { class: 'gr-pos', html: i === 0 ? SENA_ICON('crown', 18) : String(i + 1) }), el('span', { class: 'pdot' + (SenaOnline.isOnline(r.last_seen) ? ' on' : '') }),
-    el('b', {}, r.username), el('span', { class: 'gr-val' }, fmt(r[k]) + (k === 'levels' ? '/16' : '')))));
+    el('b', {}, r.username), el('span', { class: 'gr-val' }, fmt(r[k]) + (k === 'levels' ? '/' + (window.SENA_TOTAL_LEVELS ? SENA_TOTAL_LEVELS() : 21) : '')))));
 }
 async function pollChat() {
   if (!G.cur) return;

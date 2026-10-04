@@ -96,10 +96,10 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
 // ---------- progreso en la nube ----------
 // Une lo local con lo de la nube sin perder nada: lo mejor de cada lado.
 function mergeProgress(a, b) {
-  const A = a || {}, B = b || {}, pick = (x, y) => [0, 1, 2].map(i => Math.max(x?.[i] | 0, y?.[i] | 0));
+  const A = a || {}, B = b || {}, pick = (x, y) => [0, 1, 2, 3].map(i => Math.max(x?.[i] | 0, y?.[i] | 0));
   const done = pick(A.done, B.done);
-  const sum = d => [0, 1, 2].reduce((n, i) => n + (d?.[i] | 0), 0), useA = sum(A.done) >= sum(B.done);
-  return { done, node: (useA ? A.node : B.node) || [0, 0, 0], world: Math.max(A.world | 0, B.world | 0) };
+  const sum = d => [0, 1, 2, 3].reduce((n, i) => n + (d?.[i] | 0), 0), useA = sum(A.done) >= sum(B.done);
+  return { done, node: (useA ? A.node : B.node) || [0, 0, 0, 0], world: Math.max(A.world | 0, B.world | 0) };
 }
 function mergePowers(a, b) {
   const out = {}, A = a || {}, B = b || {};

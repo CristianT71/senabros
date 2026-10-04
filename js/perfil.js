@@ -27,7 +27,7 @@ async function openProfile(who) {
   $('pcSub').textContent = p.player_code + ' · ' + (CHAR_LABEL[p.character_name] || p.character_name) + ' · ' + (on ? 'conectado' : 'jugando desde ' + new Date(p.created_at).toLocaleDateString('es', { month: 'short', year: 'numeric' }));
   $('pcCrowns').replaceChildren(...(p.crowns || []).map(b => el('span', { html: SENA_ICON('crown', 14) + ' Campeón: ' + BOARD(b) })));
   const st = p.stats || {}, done = Array.isArray(p.done) ? p.done : [], levels = done.reduce((a, b) => a + (b | 0), 0);
-  const stats = [[fmt(p.best_score), 'Mejor puntaje'], [levels + '/16', 'Niveles'], [fmt(st.kills), 'Bugs eliminados'], [fmt(st.coinsEarned), 'Monedas'],
+  const stats = [[fmt(p.best_score), 'Mejor puntaje'], [levels + '/' + (window.SENA_TOTAL_LEVELS ? SENA_TOTAL_LEVELS() : 21), 'Niveles'], [fmt(st.kills), 'Bugs eliminados'], [fmt(st.coinsEarned), 'Monedas'],
     [fmt(st.raceWins), 'Carreras ganadas'], [fmt(st.partyWins), 'Fiestas ganadas'], [fmt(st.quizRight), 'Preguntas bien'], [fmt(p.levels_published), 'Niveles creados']];
   $('pcStats').replaceChildren(...stats.map(([v, l]) => el('div', {}, el('b', {}, v), el('small', {}, l))));
   const ach = window.SENA_ACH_FOR ? SENA_ACH_FOR(st, done, p.eq) : [];
