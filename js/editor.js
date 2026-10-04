@@ -214,6 +214,7 @@ $('edPublish').onclick = async () => {
   if (!window.SenaOnline || !SenaOnline.user) return msg('Inicia sesión para publicar tu nivel');
   const title = (ed.lv.title || '').trim();
   if (title.length < 3) { $('edTitle').focus(); return msg('Ponle un nombre de al menos 3 letras'); }
+  if (window.SENA_BAD && SENA_BAD.test(title)) { $('edTitle').focus(); return msg('El nombre tiene palabras no permitidas'); }
   if (!hasFlag(ed.lv)) return msg('Pon la bandera de meta antes de publicar');
   if (!confirm(`¿Publicar "${title}" para que todos lo puedan jugar?`)) return;
   $('edPublish').disabled = true;
@@ -260,8 +261,18 @@ async function renderPanel() {
       el('div', { class: 'ed-info' }, el('b', {}, x.title), el('small', { class: 'clickable', 'data-profile': x.author, title: 'Ver perfil del autor' }, 'de ' + x.author + ' · ' + THEME_NAME(x.theme) + ' · ' + x.plays + ' partidas · ' + x.clears + ' lo superaron'), el('code', {}, x.code)),
       like,
       el('button', { type: 'button', class: 'mini ok', onclick: () => playCommunity(x.code) }, 'Jugar'),
-      x.mine ? el('button', { type: 'button', class: 'mini danger', onclick: async () => { if (!confirm('¿Borrar "' + x.title + '" de la comunidad?')) return; const e = await SenaOnline.deleteLevel(x.code); if (e) msg(e); renderPanel(); } }, 'Borrar') : null);
+      x.mine ? el('button', { type: 'button', class: 'mini danger', onclick: async () => { if (!confirm('¿Borrar "' + x.title + '" de la comunidad?')) return; const e = await SenaOnline.deleteLevel(x.code); if (e) msg(e); renderPanel(); } }, 'Borrar')
+        : x.reported ? el('small', { class: 'ed-rep' }, 'Reportado') : el('button', { type: 'button', class: 'mini', title: 'Reportar nivel', onclick: e => reportMenu(e.target, x) }, 'Reportar'),
+      x.hidden ? el('small', { class: 'ed-hidden' }, 'Oculto por reportes') : null);
   }));
+}
+function reportMenu(btn, x) {   // por qué se reporta (3 reportes lo ocultan)
+  const row = btn.parentElement, old = row.querySelector('.ed-repmenu'); if (old) { old.remove(); return; }
+  const send = async reason => { const e = await SenaOnline.reportLevel(x.code, reason); msg(e || 'Gracias por avisar. Lo revisaremos.', !e); renderPanel(); };
+  row.append(el('div', { class: 'ed-repmenu' }, el('b', {}, '¿Qué pasa con este nivel?'),
+    el('button', { type: 'button', class: 'mini', onclick: () => send('groserias') }, 'Groserías u ofensivo'),
+    el('button', { type: 'button', class: 'mini', onclick: () => send('trampa') }, 'Imposible o trampa'),
+    el('button', { type: 'button', class: 'mini', onclick: () => send('otro') }, 'Otra cosa')));
 }
 async function playCommunity(code) {
   const r = await SenaOnline.getLevel(code);

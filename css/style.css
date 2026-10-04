@@ -1101,3 +1101,8 @@ body.touch #tuto { top: 64px; }
 .item.pro::before { content: "NUEVO"; position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 6px; background: #ff7ad9; color: #2a1060; font: 900 9px "Trebuchet MS", sans-serif; letter-spacing: 1px; }
 
 .item .tag.free { background: #39d98a33; color: #39d98a; }
+
+.ed-row { flex-wrap: wrap; }
+.ed-rep { color: #bcd6b4; font-weight: 800; } .ed-hidden { width: 100%; color: #ff9aa4; font-weight: 800; }
+.ed-repmenu { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px; background: #ff5a6a1a; border: 1px solid #ff5a6a66; }
+.ed-repmenu b { font-size: 12px; margin-right: 4px; }

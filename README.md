@@ -92,6 +92,21 @@ SenaBros/
 - Los niveles creados no dan monedas para la tienda, logros ni puestos en el ranking (así nadie arma niveles llenos de monedas).
 - Formato: `{ v:1, W, rows:[14 textos] }`; la conversión a nivel jugable es `editorToSpec()` en `js/game.js`.
 
+## Moderación
+
+- El servidor no deja usuarios ni nombres de niveles con groserías (`has_bad_word`; las palabras cortas solo cuentan
+  sueltas, así "computadora" o "Vergara" sí pasan).
+- En Comunidad cada nivel tiene **Reportar** (groserías, imposible/trampa u otra cosa). Con 3 reportes de personas
+  distintas se oculta solo; su dueño lo sigue viendo como "Oculto por reportes".
+- Para revisarlos en Supabase (SQL Editor):
+  ```sql
+  select l.code, l.title, p.username, count(r.*) reportes
+  from user_levels l join profiles p on p.id = l.owner left join level_reports r on r.level_id = l.id
+  where l.hidden group by l.code, l.title, p.username;
+  update user_levels set hidden = false where code = 'NV-XXXXX';   -- volver a mostrarlo
+  delete from user_levels where code = 'NV-XXXXX';                 -- o borrarlo
+  ```
+
 ## Agregar o cambiar un modelo
 
 Los .glb se comprimen con [gltf-transform](https://gltf-transform.dev) (geometría con meshopt y texturas WebP):

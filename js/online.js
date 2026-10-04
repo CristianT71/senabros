@@ -110,6 +110,8 @@ function mergePowers(a, b) {
   }
   return out;
 }
+// mismas groserías que revisa el servidor (has_bad_word): solo para avisar antes de enviar
+window.SENA_BAD = { test: t => /(hijueputa|hijuepu|hpta|gonorrea|malparid|careverga|caremonda|pendej|maric[oó]n)/i.test(t) || /(^|[^a-záéíóúñ])(hp|puta|puto|putas|mierda|verga|marica|culo|imbecil|imbécil|idiota|estupid[oa]s?|estúpid[oa]s?|perra|zorra|chimba|guevon|huevon|gueva|malparido)([^a-záéíóúñ]|$)/i.test(t) };
 const readLocal = key => { try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) { return {}; } };
 // estadísticas: contadores que solo suben, se queda el mayor de cada lado
 function mergeStats(a, b) { const out = {}, A = a || {}, B = b || {}; for (const k of new Set([...Object.keys(A), ...Object.keys(B)])) out[k] = Math.max(A[k] | 0, B[k] | 0); return out; }
@@ -325,7 +327,7 @@ async function submit(e) {
     let newCode = null;
     if (state.tab === 'signup') {
       const { data: free, error: e1 } = await db.rpc('username_available', { name: u });
-      if (e1) throw e1; if (!free) throw { message: 'Ese usuario ya existe' };
+      if (e1) throw e1; if (!free) throw { message: window.SENA_BAD && SENA_BAD.test(u.replace(/_/g, ' ')) ? 'Ese usuario no está permitido' : 'Ese usuario ya existe' };
       const { data, error } = await db.auth.signUp({ email: emailFor(u), password: pw, options: { data: { username: u } } });
       if (error) throw error;
       if (!data.session) throw { message: 'Cuenta creada, pero el servidor pide confirmar el correo. Avisa al administrador.' };
@@ -424,6 +426,7 @@ window.SenaOnline = {
   async getLevel(code) { const { data, error } = await db.rpc('get_level', { level_code: code }); return error ? { error: friendly(error) } : { level: (data || [])[0] }; },
   async clearLevel(code) { await db.rpc('clear_level', { level_code: code }); },
   async likeLevel(code, on) { const { data, error } = await db.rpc('like_level', { level_code: code, on_off: on }); return error ? null : data; },
+  async reportLevel(code, reason) { const { error } = await db.rpc('report_level', { level_code: code, reason }); return error ? friendly(error) : null; },
   async deleteLevel(code) { const { error } = await db.rpc('delete_level', { level_code: code }); return error ? friendly(error) : null; },
   // ranking semanal, tienda y campeones (js/premios.js)
   async submitScore(board, val) { if (!state.profile) return; const { error } = await db.rpc('submit_score', { board_name: board, val: Math.round(val) }); if (error) console.warn('ranking:', error.message); },
