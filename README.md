@@ -119,6 +119,26 @@ npx @gltf-transform/cli meshopt tmp.glb assets/modelos/personajes/Nombre.glb --l
 Como los assets quedan guardados un año en el navegador, si reemplazas un archivo sube `ASSET_V` en `js/assets.js`.
 La calidad de gráficos (automática, alta, media, baja) se cambia en Ajustes; en automática baja sola si el juego va lento.
 
+## Apps de Windows y Android
+
+La web detecta el dispositivo (Ajustes > DESCARGAR LA APP, y un aviso al entrar): en Android ofrece el `.apk`, en Windows el `.exe`, y en
+otros dispositivos se juega en la web. Las apps abren el mismo juego y avisan de las versiones nuevas con una barra de porcentaje.
+
+- `apps/desktop/`: Windows con Electron. Se actualiza solo con `electron-updater` leyendo GitHub Releases.
+- `apps/android/`: Android con Capacitor. `native/ApkUpdaterPlugin.java` descarga el APK nuevo con progreso y abre el instalador
+  (Android siempre pide confirmar la instalación). `senabros.keystore` firma todas las versiones: **no lo pierdas ni lo cambies**, si no
+  Android no deja actualizar encima de la app instalada.
+- `js/nativo.js`: detección, botón de descarga y ventana de actualización.
+- Compilan solas en GitHub Actions (`.github/workflows/release.yml`). Para sacar una versión nueva:
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1      # en unos 10 minutos aparece en GitHub > Releases
+```
+
+Los cambios del juego (web) se ven al instante en la web con cada `git push`; las apps los reciben cuando publicas una versión nueva.
+Para probar en tu PC: `node apps/build-www.mjs`, luego `cd apps/desktop && npm i && npm start` (en VS Code quita `ELECTRON_RUN_AS_NODE`).
+
 ## Música
 
 Se genera con código (Web Audio): cada mundo, el mapa, el menú, el jefe, la carrera y la fiesta tienen su canción

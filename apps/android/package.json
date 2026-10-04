@@ -1,0 +1,14 @@
+{
+  "name": "senabros-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SENA Bros para Android (Capacitor)",
+  "dependencies": {
+    "@capacitor/android": "^7.4.0",
+    "@capacitor/cli": "^7.4.0",
+    "@capacitor/core": "^7.4.0"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.0"
+  }
+}

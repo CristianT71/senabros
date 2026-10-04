@@ -508,9 +508,10 @@
   <script src="js/editor.js"></script>
   <script src="js/perfil.js"></script>
   <script src="js/grupos.js"></script>
+  <script src="js/nativo.js"></script>
   <script>
     // App instalable (PWA): guarda el juego en el dispositivo y permite "Agregar a inicio"
-    if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    if ('serviceWorker' in navigator && location.protocol === 'https:' && !(window.SENA_APP && SENA_APP.native)) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
     (() => {
       let ask = null; const btn = document.getElementById('sInstall'), note = document.getElementById('installNote');
       const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;

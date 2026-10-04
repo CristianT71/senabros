@@ -7,3 +7,10 @@ fuentes/
 Thumbs.db
 desktop.ini
 .vercel
+
+# Apps de escritorio y Android (se generan solas)
+apps/www/
+apps/desktop/node_modules/
+apps/desktop/dist/
+apps/android/node_modules/
+apps/android/android/
