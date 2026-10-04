@@ -8,6 +8,13 @@
   <meta name="theme-color" content="#0b1a10">
   <title>SENA Bros</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2a7d00">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SENA Bros">
+  <link rel="apple-touch-icon" href="assets/icons/icono-180.png">
 </head>
 <body class="menu">
   <div id="game"></div>
@@ -432,6 +439,9 @@
       <label>Música <b id="vMusic">45%</b><input type="range" id="sMusic" min="0" max="100" step="5"></label>
       <small class="ts-note">La tecla M silencia todo el sonido.</small>
       <div class="ts-row"><button id="sTuto" type="button">Ver el tutorial otra vez</button></div>
+      <div class="ts-sec">APP</div>
+      <div class="ts-row"><button id="sInstall" type="button" class="big">Instalar en este dispositivo</button></div>
+      <small id="installNote" class="ts-note"></small>
       <div class="touch-only ts-sec">CONTROLES</div>
       <label class="touch-only">Tamaño de la cruceta <b id="vPad">100%</b><input type="range" id="sPad" min="60" max="160" step="5"></label>
       <label class="touch-only">Tamaño de los botones <b id="vBtn">100%</b><input type="range" id="sBtn" min="60" max="160" step="5"></label>
@@ -477,6 +487,24 @@
   <script src="js/premios.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/perfil.js"></script>
+  <script>
+    // App instalable (PWA): guarda el juego en el dispositivo y permite "Agregar a inicio"
+    if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    (() => {
+      let ask = null; const btn = document.getElementById('sInstall'), note = document.getElementById('installNote');
+      const standalone = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone;
+      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const show = () => {
+        if (standalone) { btn.hidden = true; note.textContent = 'Ya estás jugando desde la app instalada.'; }
+        else if (ask) { btn.hidden = false; note.textContent = 'Queda con su ícono, a pantalla completa y abre más rápido.'; }
+        else { btn.hidden = true; note.textContent = ios ? 'En iPhone: botón Compartir y luego "Agregar a inicio".' : 'En el celular: menú del navegador y luego "Instalar app" o "Agregar a inicio".'; }
+      };
+      addEventListener('beforeinstallprompt', e => { e.preventDefault(); ask = e; show(); });
+      addEventListener('appinstalled', () => { ask = null; note.textContent = '¡Listo! Ya está en tu inicio.'; btn.hidden = true; });
+      btn.onclick = async () => { if (!ask) return; ask.prompt(); await ask.userChoice; ask = null; show(); };
+      show();
+    })();
+  </script>
   <script>/* authFallback */setTimeout(function(){var a=document.getElementById("authScreen");if(a&&a.classList.contains("checking"))a.classList.remove("checking")},9000)</script>
 </body>
 </html>
