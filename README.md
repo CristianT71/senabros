@@ -174,6 +174,17 @@ Agrega al final de la dirección:
 - Al terminar todos vuelven a la sala con la tabla de resultados.
 - Canales privados: solo jugadores con cuenta (políticas en `supabase/migrations/20261003000000_multijugador_realtime.sql`).
 
+### Atados, agarrar/lanzar y Fútbol
+- **Atados:** cada jugador va amarrado a sus vecinos (orden por id) con una cuerda de 4,4 bloques. Cada uno simula la cuerda sobre su
+  propio personaje: el que está en el aire es el que se mueve y el que pisa firme hace de ancla (por eso se sostiene al que cae a un hueco).
+  Colgando, saltar trepa la cuerda. Los estados llevan `gr` (si pisa firme).
+- **Agarrar y lanzar** (En equipo y Atados): golpe frente a un compañero lo agarra (`tgrab`), otro golpe lo lanza (`tthrow`, Shift más
+  lejos, arriba más alto); el agarrado se suelta saltando (`tfree`). También se puede parar uno en la cabeza del otro.
+- **Fútbol:** Verdes contra Dorados (equipos por orden de la sala), 3 minutos y gol de oro si empatan. El que reparte (`isSpawner`) manda el
+  balón 12 veces por segundo (`ball`) y marca los goles (`goal`); las patadas las avisa quien patea (`kick`). Golpe = patada fuerte
+  (arriba = globo, abajo = rasante).
+- Prueba sin red: `pgtest/equipo_check.mjs` (un compañero simulado).
+
 ### Modos y chat en línea
 - **En equipo:** si caes quedas como fantasma 20 s; un compañero te revive tocándote. Si cae todo el equipo, vuelven al checkpoint.
 - **Carrera:** cada uno juega su propio mundo; gana el primero en la bandera (luego hay 30 s para los demás). Ranking en vivo,

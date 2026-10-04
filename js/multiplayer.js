@@ -9,7 +9,9 @@ const btn = $('mpBtn');
 if (!window.SenaOnline || !window.SENA_MP || !btn) { if (btn) btn.style.display = 'none'; return; }
 
 const MODES = {
-  coop: { label: 'En equipo', hud: 'EN EQUIPO', desc: 'En equipo (revive a tus compañeros)' },
+  coop: { label: 'En equipo', hud: 'EN EQUIPO', desc: 'En equipo (revive, agarra y lanza a tus compañeros)' },
+  atados: { label: 'Atados', hud: 'ATADOS', desc: 'Atados: van amarrados con una cuerda. ¡Coordinen los saltos!' },
+  futbol: { label: 'Fútbol', hud: 'FÚTBOL', desc: 'Fútbol: Verdes contra Dorados, 3 minutos', arena: true },
   race: { label: 'Carrera', hud: 'CARRERA', desc: 'Carrera (el primero en llegar gana)' },
   battle: { label: 'Batalla de monedas', hud: 'BATALLA DE MONEDAS', desc: 'Batalla de monedas (2 minutos, gana quien junte más)', arena: true },
   survival: { label: 'Supervivencia', hud: 'SUPERVIVENCIA', desc: 'Supervivencia (aguanten oleadas de bugs en equipo)', arena: true },
@@ -106,6 +108,15 @@ function renderResults() {
     box.replaceChildren(el('div', { class: 'ptitle' }, 'Resultados ' + r.label + '  -  ' + head),
       el('div', { class: 'rtable' }, el('div', { class: 'rh' }, el('span', {}, 'Jugador'), el('span', {}, 'Jefes'), el('span', {}, 'Bugs'), el('span', {}, 'Puntos')),
         ...rows.map((x, i) => el('div', { class: 'rr' + (i === 0 ? ' first' : '') }, el('span', {}, x.n), el('span', {}, (x.wave | 0) + ' / 3'), el('span', {}, String(x.kills)), el('span', {}, x.score.toLocaleString('es'))))), again);
+    return;
+  }
+  if (r.mode === 'futbol') {
+    const rows = [...r.rows.values()].sort((a, b) => a.team - b.team || b.goals - a.goals), x0 = rows[0] || {};
+    const g0 = x0.team === 0 ? x0.gf : x0.ga, g1 = x0.team === 0 ? x0.ga : x0.gf;
+    const head = 'Verdes ' + g0 + ' - ' + g1 + ' Dorados  ·  ' + (g0 === g1 ? 'Empate' : '¡Ganan los ' + (g0 > g1 ? 'Verdes' : 'Dorados') + '!');
+    box.replaceChildren(el('div', { class: 'ptitle' }, 'Resultados ' + r.label + '  -  ' + head),
+      el('div', { class: 'rtable' }, el('div', { class: 'rh' }, el('span', {}, 'Jugador'), el('span', {}, 'Equipo'), el('span', {}, 'Goles'), el('span', {}, 'Puntos')),
+        ...rows.map(x => el('div', { class: 'rr' + ((x.team === 0 ? g0 > g1 : g1 > g0) ? ' first' : '') }, el('span', {}, x.n), el('span', {}, x.team ? 'Dorados' : 'Verdes'), el('span', {}, String(x.goals)), el('span', {}, x.score.toLocaleString('es'))))), again);
     return;
   }
   if (r.mode === 'party') {
@@ -257,7 +268,7 @@ async function leaveLevel(showLobby = true) {
 }
 function addResult(r) {
   if (!r || !st.results) return;
-  st.results.rows.set(r.u, { n: r.n, coins: r.coins | 0, kills: r.kills | 0, score: r.score | 0, place: r.place | 0, time: +r.time || 0, wave: r.wave | 0, wins: r.wins | 0 });
+  st.results.rows.set(r.u, { n: r.n, coins: r.coins | 0, kills: r.kills | 0, score: r.score | 0, place: r.place | 0, time: +r.time || 0, wave: r.wave | 0, wins: r.wins | 0, team: r.team | 0, gf: r.gf | 0, ga: r.ga | 0, goals: r.goals | 0 });
   if ($('mpScreen').classList.contains('show')) renderResults();
 }
 function levelDone(stats) {

@@ -1257,6 +1257,7 @@ const MODE_EVENTS = {   // qué se comparte en cada modo (en equipo se comparte 
   survival: new Set(['kill', 'boss', 'wave', 'revive', 'emote']),
   party: new Set(['pround', 'pres', 'pcrown', 'stomp', 'pbomb', 'pboom', 'pgrab', 'ppush', 'kill', 'emote']),
   jefes: new Set(['boss', 'revive', 'emote']),
+  futbol: new Set(['ball', 'kick', 'goal', 'stomp', 'ppush', 'emote']),
 };
 function net(type, payload) {
   if (!game.mp || netMute || !window.SENA_NET) return;
@@ -1269,7 +1270,7 @@ function addCoinCount() { if (netMute) return; game.coins++; addStat('coinsEarne
 function resetPlayer(x) {
   Object.assign(player, { x, y: 2, vx: 0, vy: 0, facing: 1, grounded: false, crouch: false, pound: false, punchT: 0, landT: 0, dead: false, deadT: 0, invT: 1.2, rot: 0,
     big: false, growT: 0, hw: SIZE.small.hw, h: SIZE.small.h,
-    powerCD: 0, shieldT: 0, dashT: 0, slowT: 0, powerAnimT: 0, airDash: true, airJumps: 1, stunT: 0, safeX: x, safeY: 2 });
+    powerCD: 0, shieldT: 0, dashT: 0, slowT: 0, powerAnimT: 0, airDash: true, airJumps: 1, stunT: 0, safeX: x, safeY: 2, carrying: null, carriedBy: null, onHead: null, ropeHang: null, ropeJumpT: 0 });
   play('M_Idle', { fade: 0.05 });
 }
 // entra a un nivel (índice 0..5)
@@ -1366,6 +1367,7 @@ function updateRemotes(dt) {
     const k = Math.min(1, dt * 14);
     r.x += (px - r.x) * k; r.y += (py - r.y) * k;
     if (Math.abs(px - r.x) > 4 || Math.abs(py - r.y) > 4) { r.x = px; r.y = py; }   // salto grande (reaparición)
+    if (player.carrying === r.uid) { if (r.ghost || r.dead) player.carrying = null; else { r.x = player.x; r.y = player.y + player.h + 0.05; } }
     const target = r.facing > 0 ? 0 : -Math.PI; r.rot += (target - r.rot) * Math.min(1, dt * 14);
     const hh = 0.5 * r.sc * 0.95, fs = r.facing > 0 ? 1 : -1;
     r.model.position.set(r.x + fs * hh * Math.sin(r.tilt), r.y + hh - hh * Math.cos(r.tilt), -0.35);
@@ -1378,7 +1380,7 @@ function updateRemotes(dt) {
 }
 function applyRemoteState(uid, st) {
   const r = remotes.get(uid); if (!r) return;
-  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d; r.fin = !!st.fin; r.coins = st.c | 0; r.kills = st.kl | 0; r.pv = +st.pv || 0;
+  r.tx = st.x; r.ty = st.y; r.vx = st.vx || 0; r.vy = st.vy || 0; r.facing = st.f || 1; r.tilt = st.t || 0; r.sc = st.k || 1; r.dead = !!st.d; r.fin = !!st.fin; r.coins = st.c | 0; r.kills = st.kl | 0; r.pv = +st.pv || 0; r.gr = !!st.gr;
   if (!!st.g !== !!r.ghost) { r.ghost = !!st.g; if (r.model) setModelOpacity(r.model, r.ghost ? 0.38 : 1); if (r.helpTag) r.helpTag.visible = r.ghost && !pState(); }
   r.last = performance.now();
   if (!r.has) { r.has = true; r.x = st.x; r.y = st.y; }
@@ -1432,6 +1434,18 @@ function applyRemoteEvent(uid, name, type, p) {
       if (p.u === game.mp.me && player.ghost) reviveSelf(name);
     } else if (type === 'stomp') {
       if (p.u === game.mp.me) gotStomped(uid, name);
+    } else if (type === 'tgrab') {
+      if (p.u === game.mp.me && !player.ghost && !player.dead) { player.carriedBy = uid; player.carrying = null; toast(name + ' te agarró. Salta para soltarte', 1500); }
+    } else if (type === 'tthrow') {
+      if (p.u === game.mp.me && player.carriedBy === uid) { player.carriedBy = null; player.vx = +p.vx || 0; player.vy = +p.vy || 12; player.grounded = false; player.stunT = 0.35; play('M_Jump', { loop: false, fade: 0.05 }); }
+    } else if (type === 'tfree') {
+      if (p.u === game.mp.me && player.carrying === uid) player.carrying = null;
+    } else if (type === 'ball') {
+      futBallNet(p, false, uid);
+    } else if (type === 'kick') {
+      futBallNet(p, true, uid);
+    } else if (type === 'goal') {
+      netMute = false; futGoal(p.t | 0, p.s || [0, 0], p.by || '');
     } else if (type === 'loot') {
       if (p.u === game.mp.me && p.n > 0) { netMute = false; game.coins += p.n; addScore(p.n * 200); toast('Le robaste ' + p.n + ' monedas a ' + name, 1600); SFX.coin(); }
     }
@@ -1441,11 +1455,11 @@ function localNetState() {
   if (!game.mp || !model || !(game.state === 'play' || game.state === 'win' || game.state === 'won')) return null;
   const r2 = v => Math.round(v * 100) / 100;
   return { x: r2(player.x), y: r2(player.y), vx: r2(player.vx), vy: r2(player.vy), f: player.facing, a: curName, s: r2(cur ? cur.timeScale : 1),
-    d: player.dead ? 1 : 0, g: player.ghost || player.spect ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x), fin: game.mp.finished ? 1 : 0, c: game.coins | 0, kl: game.runKills | 0, pv: game.mp.party ? Math.round(game.mp.party.val * 10) / 10 : 0 };
+    d: player.dead ? 1 : 0, g: player.ghost || player.spect ? 1 : 0, t: r2(player.tilt || 0), k: r2(model.scale.x), fin: game.mp.finished ? 1 : 0, c: game.coins | 0, kl: game.runKills | 0, gr: player.grounded ? 1 : 0, pv: game.mp.party ? Math.round(game.mp.party.val * 10) / 10 : 0 };
 }
 function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}], me }
   stopMP();
-  const mode = ['race', 'battle', 'survival', 'party', 'jefes'].includes(opts.mode) ? opts.mode : 'coop';
+  const mode = ['race', 'battle', 'survival', 'party', 'jefes', 'atados', 'futbol'].includes(opts.mode) ? opts.mode : 'coop';
   game.mp = { me: opts.me, mode, order: [], finished: false, sent: false, t0: performance.now(), raceLeft: 0, names: {},
     ids: (opts.order || []).slice(), battleLeft: 120, wave: 0, waveBreak: 2.5, coinT: 1, bcoins: new Map(), nextCoin: 0, over: false };
   opts.players.forEach(q => { game.mp.names[q.uid] = q.name; });
@@ -1455,18 +1469,22 @@ function startMP(opts) {   // opts: { world, level, players: [{uid, name, char}]
   if (mode === 'battle' || mode === 'survival') { game.arena = arenaSpec(mode); startLevel(-1); }
   else if (mode === 'jefes') { game.mp.jefes = { phase: 0, state: 'intro', t: 3.5, cleared: 0, t0: performance.now() }; game.arena = jefesArena(0); startLevel(-1); }
   else if (mode === 'party') { game.arena = partyArena('duelo'); game.arena.name = 'Fiesta de minijuegos'; startLevel(-1); partyInit(); }
+  else if (mode === 'futbol') { game.arena = futbolArena(); startLevel(-1); futbolInit(); }
   else { game.arena = null; startLevel(opts.level - 1); }
   // cada jugador sale en un punto distinto (antes salían todos encima y se quedaban pegados)
   const idx = Math.max(0, game.mp.ids.indexOf(opts.me)), n = Math.max(1, game.mp.ids.length);
   const sx = game.arena ? 6 + idx * ((game.arena.W - 12) / Math.max(1, n - 1 || 1)) : 3 + idx * 1.1;
   player.x = player.safeX = sx; game.checkpoint = sx;
-  worldLabel.textContent = { race: 'CARRERA', battle: 'BATALLA', survival: 'SUPERVIVENCIA', party: 'FIESTA', jefes: 'JEFES' }[mode] || 'EN EQUIPO';
+  worldLabel.textContent = { race: 'CARRERA', battle: 'BATALLA', survival: 'SUPERVIVENCIA', party: 'FIESTA', jefes: 'JEFES', atados: 'ATADOS', futbol: 'FÚTBOL' }[mode] || 'EN EQUIPO';
   if (mode === 'jefes') jefesPlace();
-  document.body.classList.add('mplevel'); document.body.classList.toggle('race', mode !== 'coop');
+  if (mode === 'futbol') futbolPlace();
+  if (teamPlayOn() && game.mp.ids.length > 1) setTimeout(() => { if (game.mp && game.state === 'play') toast(mode === 'atados' ? 'Van atados: si uno cae, el otro lo sostiene. Salta para trepar' : 'Golpe frente a un compañero: lo agarras. Otra vez: lo lanzas', 3200); }, 2400);
+  document.body.classList.add('mplevel'); document.body.classList.toggle('race', mode !== 'coop' && mode !== 'atados');
 }
 function stopMP() {
   [...remotes.keys()].forEach(removeRemote);
   if (player.ghost) endGhost();
+  player.carrying = player.carriedBy = player.onHead = null; game.mp = game.mp && Object.assign(game.mp, { mode: 'off' }); updateRopes();
   chatBubbles.splice(0).forEach(b => scene.remove(b.obj));
   document.body.classList.remove('mplevel', 'race', 'bossfight'); game.arena = null; player.spect = false; partyBox.hidden = true; document.getElementById('pLight').hidden = true; if (quiz.open) { quiz.answered = true; closeQuiz(); } if (game.level < 0) { game.level = 0; buildLevel(); } ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
   game.mp = null;
@@ -1605,7 +1623,7 @@ function setModelOpacity(m, a) {
   });
 }
 function teammates() { const now = performance.now(); return [...remotes.values()].filter(r => r.has && now - r.last < 6000); }
-function canBeRevived() { return !!game.mp && (game.mp.mode === 'coop' || game.mp.mode === 'survival' || game.mp.mode === 'jefes') && teammates().length > 0; }
+function canBeRevived() { return !!game.mp && (game.mp.mode === 'coop' || game.mp.mode === 'atados' || game.mp.mode === 'survival' || game.mp.mode === 'jefes') && teammates().length > 0; }
 function becomeGhost() {
   const p = player;
   p.dead = false; p.ghost = true; p.ghostT = 20; p.vx = p.vy = 0; p.pound = false;
@@ -1725,6 +1743,8 @@ function updateMpFx(dt) {
   if (!game.mp || !(game.state === 'play' || game.state === 'win')) return;
   const md = game.mp.mode;
   if (md === 'coop') checkRevives(dt);
+  else if (md === 'atados') { checkRevives(dt); updateRopes(); }
+  else if (md === 'futbol') { raceContacts(dt); updateFutbol(dt); }
   else if (md === 'race') { raceContacts(dt); updateRaceHud(dt); }
   else if (md === 'battle') { raceContacts(dt); updateBattle(dt); }
   else if (md === 'survival') { checkRevives(dt); updateSurvival(dt); }
@@ -2099,6 +2119,242 @@ const PARTY_WARN = new T.MeshStandardMaterial({ color: 0xff3a3a, emissive: 0x8a0
 window.SENA_PARTY = { state: () => { const P = pState(); return P ? { r: P.r, g: P.g, phase: P.phase, val: P.val, pts: P.pts, list: P.list, out: P.out, crown: P.crown } : null; } };
 
 
+// ================= Juego en equipo: pararse en la cabeza, agarrar y lanzar al compañero =================
+// En "En equipo" y "Atados": J (o G) frente a un compañero lo agarra y otra vez J lo lanza. El agarrado se suelta saltando.
+// Cada uno mueve su propio personaje: el que agarra avisa con 'tgrab' y el agarrado se pone solo sobre su cabeza.
+const teamPlayOn = () => !!game.mp && (game.mp.mode === 'coop' || game.mp.mode === 'atados');
+const mateTop = r => r.y + SIZE.small.h * r.sc;
+const rnd2 = v => Math.round(v * 100) / 100;
+function headUnder(p, yPrev, wasOn) {   // compañero bajo los pies: sirve de plataforma (torre humana)
+  for (const r of teammates()) {
+    if (r.ghost || r.dead || r.uid === p.carrying) continue;
+    const top = mateTop(r), tol = wasOn === r.uid ? 0.4 : 0.12;
+    if (Math.abs(p.x - r.x) < 0.42 + p.hw * 0.5 && yPrev >= top - tol && p.y <= top + 0.02) return r;
+  }
+  return null;
+}
+function mateInReach(p) {
+  let best = null, bd = 9;
+  for (const r of teammates()) {
+    if (r.ghost || r.dead || r.fin) continue;
+    const dx = (r.x - p.x) * p.facing;
+    if (dx > -0.3 && dx < 1.5 && Math.abs(r.y - p.y) < 1.1 && dx < bd) { bd = dx; best = r; }
+  }
+  return best;
+}
+function teamGrabPress(p) {   // true si el botón se usó para agarrar o lanzar (entonces no hay golpe)
+  if (!teamPlayOn() || p.carriedBy) return false;
+  if (p.carrying) {
+    const r = remotes.get(p.carrying); p.carrying = null;
+    if (!r) return true;
+    const strong = held('ShiftLeft', 'ShiftRight'), up = held('ArrowUp', 'KeyW');
+    net('tthrow', { u: r.uid, vx: rnd2(p.facing * (strong ? 16 : 12.5) + p.vx * 0.4), vy: up ? 17 : 12.5 });
+    play('M_Punch', { loop: false, fade: 0.05, speed: 1.4 }); SFX.jump(); shake = 0.15; addStat('throws');
+    burstColor(r.x, r.y + 1.2, 0xffd23f, 14, 4);
+    return true;
+  }
+  const r = mateInReach(p); if (!r) return false;
+  p.carrying = r.uid; net('tgrab', { u: r.uid }); SFX.bump();
+  toast('Agarraste a ' + r.name + '. Otra vez para lanzarlo', 1400);
+  return true;
+}
+function updateCarried(p) {   // me están cargando: voy sobre la cabeza del que me agarró
+  const r = remotes.get(p.carriedBy);
+  if (!r || r.ghost || r.dead || performance.now() - r.last > 3000) { p.carriedBy = null; return false; }
+  if (pressed.jump) { const u = p.carriedBy; p.carriedBy = null; p.vy = JUMP * 0.85; p.grounded = false; net('tfree', { u }); SFX.jump(); play('M_Jump', { loop: false, fade: 0.05 }); return false; }
+  p.x = r.x; p.y = mateTop(r) + 0.05; p.vx = r.vx; p.vy = 0; p.grounded = false; p.facing = r.facing;
+  return true;
+}
+
+// ---- Atados: una cuerda elástica une a cada jugador con sus vecinos (orden por id) ----
+const ROPE_L = 4.4, ROPE_SEG = 12, ROPE_UP = new T.Vector3(0, 1, 0);
+const ropeMeshes = new Map();
+const ropeGeo = new T.CylinderGeometry(0.045, 0.045, 1, 6), ropeMat = new T.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.95 });
+function ropeIds() { return [game.mp.me, ...teammates().map(r => r.uid)].sort(); }
+function ropePartners() { const ids = ropeIds(), i = ids.indexOf(game.mp.me); return [ids[i - 1], ids[i + 1]].filter(Boolean).map(u => remotes.get(u)).filter(Boolean); }
+function ropeAnchor(uid) {
+  if (uid === game.mp.me) return { x: player.x, y: player.y + 0.55, off: player.ghost || player.dead };
+  const r = remotes.get(uid); return r && r.model ? { x: r.x, y: r.y + 0.55, off: r.ghost || r.dead } : null;
+}
+function ropeConstrain(p, dt) {   // la cuerda tira de mi personaje: el que está en el aire es el que se mueve; el que pisa firme hace de ancla
+  p.ropeHang = null; p.ropeJumpT = (p.ropeJumpT || 0) - dt; p.ropeHangT = (p.ropeHangT || 0) - dt;
+  if (p.ghost || p.dead || p.carriedBy || game.state !== 'play') return;
+  for (const r of ropePartners()) {
+    if (r.ghost || r.dead) continue;
+    const dx = p.x - r.x, dy = p.y - r.y, d = Math.hypot(dx, dy);
+    if (d <= ROPE_L) continue;
+    const nx = dx / d, ny = dy / d, over = d - ROPE_L;
+    const k = !p.grounded && r.gr ? 1 : p.grounded && !r.gr ? 0.12 : 0.5;
+    moveX(p, -nx * over * k);
+    const ry = moveY(p, -ny * over * k); if (ry && ry.ground) p.grounded = true;
+    const vOut = p.vx * nx + p.vy * ny; if (vOut > 0) { p.vx -= vOut * nx; p.vy -= vOut * ny; }
+    if (ny < -0.55 && !p.grounded) { p.ropeHang = r.uid; p.ropeHangT = 0.3; }   // colgando debajo del compañero: puede trepar saltando (con margen por el balanceo)
+  }
+}
+function updateRopes() {
+  const keep = new Set(); let taut = false;
+  if (game.mp && game.mp.mode === 'atados') {
+    const ids = ropeIds();
+    for (let i = 1; i < ids.length; i++) {
+      const A = ropeAnchor(ids[i - 1]), B = ropeAnchor(ids[i]); if (!A || !B || A.off || B.off) continue;
+      const key = ids[i - 1] + '|' + ids[i]; keep.add(key);
+      let segs = ropeMeshes.get(key);
+      if (!segs) { segs = []; for (let k = 0; k < ROPE_SEG; k++) { const m = new T.Mesh(ropeGeo, ropeMat); scene.add(m); segs.push(m); } ropeMeshes.set(key, segs); }
+      const d = Math.hypot(A.x - B.x, A.y - B.y), sag = Math.max(0, ROPE_L - d) * 0.45;
+      if (d > ROPE_L * 0.96) taut = true;
+      const pt = t => new T.Vector3(A.x + (B.x - A.x) * t, A.y + (B.y - A.y) * t - sag * 4 * t * (1 - t), 0.15);
+      for (let k = 0; k < ROPE_SEG; k++) {
+        const a = pt(k / ROPE_SEG), b = pt((k + 1) / ROPE_SEG), m = segs[k];
+        m.position.copy(a).add(b).multiplyScalar(0.5); m.scale.set(1, Math.max(0.01, a.distanceTo(b)), 1);
+        m.quaternion.setFromUnitVectors(ROPE_UP, b.sub(a).normalize());
+      }
+    }
+  }
+  ropeMat.color.setHex(taut ? 0xc0392b : 0x8a5a2b);   // roja cuando está tensa
+  for (const [k, segs] of ropeMeshes) if (!keep.has(k)) { segs.forEach(m => scene.remove(m)); ropeMeshes.delete(k); }
+}
+
+// ================= Fútbol de instructores (en línea): Verdes contra Dorados =================
+// El balón lo manda el que reparte (isSpawner) 12 veces por segundo; las patadas las avisa quien patea ('kick') y todos las aplican.
+const FUT_W = 44, BALL_R = 0.42, FUT_TIME = 180, FUT_COL = [0x39d98a, 0xffc81a], FUT_NAME = ['Verdes', 'Dorados'];
+function futbolArena() {
+  const W = FUT_W, solid = [];
+  for (let y = 2; y < 15; y++) solid.push([0, y], [W - 1, y]);                                 // fondo de los arcos
+  for (let y = 5; y < 15; y++) solid.push([1, y], [2, y], [W - 3, y], [W - 2, y]);           // travesaño y pared encima del arco
+  const plat = (a, b, y) => { for (let x = a; x <= b; x++) solid.push([x, y]); };
+  plat(12, 15, 7); plat(W - 16, W - 13, 7); plat(20, 23, 10);
+  return { name: 'Fútbol de instructores', theme: 'evening', bg: 'atardecer', style: 'grass', gaps: [], blocks: [], solid, pipes: [], coins: [], plats: [], fires: [], cannons: [],
+    springs: [7.5, W - 7.5], enemies: [], belts: [], bolts: [], flagX: W + 60, W, time: 999, checkpoint: 999, deathY: -3 };
+}
+function futTeam(uid) { const ids = game.mp.ids.length ? game.mp.ids : [game.mp.me], i = ids.indexOf(uid); return i < 0 ? 0 : i % 2; }
+function makeBallMesh() {
+  const tex = canvasTex((g, s) => {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, s, s); g.fillStyle = '#16181c';
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 6; i++) {
+      const x = (i + (j % 2) * 0.5) * s / 6, y = (j + 0.5) * s / 3; g.beginPath();
+      for (let k = 0; k < 5; k++) { const a = k * 1.2566 - 1.5708; g.lineTo(x + Math.cos(a) * s * 0.05, y + Math.sin(a) * s * 0.075); }
+      g.fill();
+    }
+  }, 256);
+  tex.magFilter = T.LinearFilter;
+  const m = new T.Mesh(new T.SphereGeometry(BALL_R, 24, 16), new T.MeshStandardMaterial({ map: tex, roughness: 0.45 }));
+  m.castShadow = true; return m;
+}
+function buildGoalsDeco() {
+  const white = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 });
+  const netTex = canvasTex((g, s) => { g.clearRect(0, 0, s, s); g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 3; for (let i = 0; i <= s; i += s / 8) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, s); g.moveTo(0, i); g.lineTo(s, i); g.stroke(); } }, 128);
+  netTex.wrapS = netTex.wrapT = T.RepeatWrapping; netTex.repeat.set(2, 3);
+  const netMat = new T.MeshBasicMaterial({ map: netTex, transparent: true, depthWrite: false, side: T.DoubleSide });
+  [[3, 1], [FUT_W - 3, -1]].forEach(([gx, dir], t) => {
+    [0.45, -0.45].forEach(z => { const post = new T.Mesh(new T.CylinderGeometry(0.09, 0.09, 3, 10), white); post.position.set(gx, 3.5, z); levelGroup.add(post); });
+    const back = new T.Mesh(new T.PlaneGeometry(2, 3), netMat); back.position.set(gx - dir, 3.5, -0.49); levelGroup.add(back);
+    const flagM = new T.Mesh(new T.BoxGeometry(0.5, 0.35, 0.04), new T.MeshBasicMaterial({ color: FUT_COL[1 - t] }));   // color del equipo que ataca ese arco
+    flagM.position.set(gx, 5.5 + 0.2, 0.52); levelGroup.add(flagM);
+  });
+}
+function futbolInit() {
+  const m = game.mp;
+  m.fut = { score: [0, 0], left: FUT_TIME, golden: false, state: 'kick', t: 3, ball: { x: FUT_W / 2, y: 8, vx: 0, vy: 0, rot: 0, last: '' }, sendT: 0, kickCd: 0, goals: 0, rings: new Map(), over: false, endAfter: false };
+  m.fut.mesh = makeBallMesh(); levelGroup.add(m.fut.mesh); buildGoalsDeco();
+}
+function futbolPlace() {
+  const m = game.mp, t = futTeam(m.me), mates = m.ids.filter(u => futTeam(u) === t), k = Math.max(0, mates.indexOf(m.me));
+  Object.assign(player, { x: t === 0 ? 10 - k * 2.5 : FUT_W - 10 + k * 2.5, y: 2, vx: 0, vy: 0, facing: t === 0 ? 1 : -1, stunT: 0 });
+  player.safeX = player.x; game.checkpoint = player.x;
+}
+function ballStep(b, dt) {
+  const n = Math.max(1, Math.ceil(dt / 0.008)), h = dt / n;
+  for (let s = 0; s < n; s++) {
+    b.vy -= 24 * h; b.x += b.vx * h; b.y += b.vy * h;
+    for (let tx = Math.floor(b.x - BALL_R); tx <= Math.floor(b.x + BALL_R); tx++)
+      for (let ty = Math.floor(b.y - BALL_R); ty <= Math.floor(b.y + BALL_R); ty++) {
+        if (!solid(tx, ty)) continue;
+        const cx = Math.max(tx, Math.min(b.x, tx + 1)), cy = Math.max(ty, Math.min(b.y, ty + 1));
+        let dx = b.x - cx, dy = b.y - cy, d = Math.hypot(dx, dy);
+        if (d >= BALL_R) continue;
+        if (d < 1e-4) { dx = 0; dy = 1; d = 1; }
+        const nx = dx / d, ny = dy / d; b.x += nx * (BALL_R - d); b.y += ny * (BALL_R - d);
+        const vn = b.vx * nx + b.vy * ny;
+        if (vn < 0) { const e = Math.abs(vn) > 2 ? 0.62 : 0; b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny; }
+        if (ny > 0.7) b.vx *= 1 - 0.7 * h;   // rueda y frena en el pasto
+      }
+    if (b.y < 2 + BALL_R) { b.y = 2 + BALL_R; if (b.vy < 0) b.vy = Math.abs(b.vy) > 2 ? -b.vy * 0.62 : 0; }
+    if (b.y > 15) { b.y = 15; b.vy = -Math.abs(b.vy) * 0.5; }
+  }
+  b.rot -= b.vx * dt / BALL_R;
+}
+function futKickCheck(p, dt) {
+  const F = game.mp.fut, b = F.ball; F.kickCd -= dt;
+  if (F.kickCd > 0 || p.ghost || p.dead || F.state !== 'play') return;
+  const dx = b.x - p.x, top = p.y + p.h;
+  const touch = Math.abs(dx) < p.hw + BALL_R && b.y > p.y - BALL_R && b.y < top + BALL_R;
+  const kick = p.punchT > 0.2 && !p.punchKick && dx * p.facing > -0.3 && dx * p.facing < 1.7 && b.y > p.y - 0.5 && b.y < top + 0.7;
+  if (!touch && !kick) return;
+  let vx, vy;
+  if (kick) {   // patada fuerte (golpe): arriba = globo, abajo = rasante
+    p.punchKick = true; const up = held('ArrowUp', 'KeyW'), dn = held('ArrowDown', 'KeyS');
+    vx = p.facing * (up ? 11 : 18); vy = up ? 15 : dn ? 2.5 : 8; SFX.punch(); shake = 0.2; burstColor(b.x, b.y, 0xffffff, 10, 4);
+  } else if (b.y > top - 0.1) { vx = p.facing * 6 + p.vx * 0.6; vy = 10; SFX.bump(); }   // cabezazo
+  else { const sg = Math.sign(dx) || p.facing; vx = sg * Math.max(5, Math.abs(p.vx) * 1.25 + 2); vy = Math.max(b.vy, 3.5 + Math.max(0, p.vy) * 0.6); b.x = p.x + sg * (p.hw + BALL_R + 0.02); }
+  b.vx = vx; b.vy = vy; b.last = game.mp.me; F.kickCd = 0.18;
+  net('kick', { x: rnd2(b.x), y: rnd2(b.y), vx: rnd2(vx), vy: rnd2(vy) });
+}
+function futBallNet(q, fromKick, uid) {
+  const F = game.mp && game.mp.fut; if (!F || F.state === 'kick') return; const b = F.ball;
+  if (!fromKick && (isSpawner() || F.kickCd > 0)) return;
+  const d = Math.hypot(q.x - b.x, q.y - b.y);
+  if (fromKick || d > 1.2) { b.x = +q.x; b.y = +q.y; } else { b.x += (q.x - b.x) * 0.5; b.y += (q.y - b.y) * 0.5; }
+  b.vx = +q.vx || 0; b.vy = +q.vy || 0; if (fromKick) b.last = uid;
+}
+function futGoal(side, s, by) {
+  const m = game.mp, F = m && m.fut; if (!F || F.state !== 'play') return;
+  F.score = [s[0] | 0, s[1] | 0]; F.state = 'goal'; F.t = 3.2; if (F.golden) F.endAfter = true;
+  const own = !!by && futTeam(by) !== side, who = by === m.me ? 'Tú' : (m.names[by] || '');
+  if (by === m.me && !own) { F.goals++; addStat('goals'); }
+  toast((own ? '¡Autogol! Punto para los ' : '¡GOOOL de los ') + FUT_NAME[side] + (own ? '' : '!') + (who ? '   ' + who : ''), 2600);
+  SFX.win(); shake = 0.5;
+  const gx = side === 1 ? 2 : FUT_W - 2; for (let i = 0; i < 4; i++) setTimeout(() => { if (game.mp) burstColor(gx, 3.5, FUT_COL[side], 30, 8); }, i * 200);
+}
+function futOver() {
+  const m = game.mp, F = m.fut; if (F.over) return; F.over = true; F.state = 'over';
+  const t = futTeam(m.me), win = F.score[t] > F.score[1 - t], tie = F.score[0] === F.score[1];
+  toast(tie ? 'Empate' : win ? '¡GANARON LOS ' + FUT_NAME[t].toUpperCase() + '!' : 'Ganaron los ' + FUT_NAME[1 - t] + '. ¡Revancha!', 3000); SFX[win || tie ? 'win' : 'die']();
+  if (win && m.ids.length >= 2) addStat('futbolWins');
+  if (!m.sent) { m.sent = true; setTimeout(mpFinish, 2600); }
+}
+function futRing(F, uid, x, y, t) {
+  let m = F.rings.get(uid);
+  if (!m) { m = new T.Mesh(new T.RingGeometry(0.32, 0.55, 28), new T.MeshBasicMaterial({ color: FUT_COL[t], transparent: true, opacity: 0.9, side: T.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; levelGroup.add(m); F.rings.set(uid, m); }
+  m.position.set(x, y + 0.04, 0); m.visible = true;
+}
+function updateFutbol(dt) {
+  const m = game.mp, F = m.fut; if (!F) return; const b = F.ball;
+  if (F.state === 'kick') {
+    F.t -= dt; b.x = FUT_W / 2; b.y = 8; b.vx = b.vy = 0;
+    if (F.t <= 0) { F.state = 'play'; SFX.bump(); toast('¡A jugar!', 900); }
+  } else if (F.state === 'goal') {
+    F.t -= dt; ballStep(b, dt);
+    if (F.t <= 0) { if (F.endAfter) futOver(); else { F.state = 'kick'; F.t = 2.2; futbolPlace(); } }
+  } else if (F.state === 'play') {
+    ballStep(b, dt); futKickCheck(player, dt);
+    F.left -= dt;
+    if (F.left <= 0 && !F.golden) {
+      if (F.score[0] === F.score[1]) { F.golden = true; toast('¡Empate! Gol de oro: el próximo gol gana', 2600); SFX.oneup(); } else futOver();
+    }
+    if (F.state === 'play' && isSpawner()) {
+      const side = b.x < 2.8 && b.y < 5 ? 1 : b.x > FUT_W - 2.8 && b.y < 5 ? 0 : -1;
+      if (side >= 0) { const s = F.score.slice(); s[side]++; net('goal', { t: side, s, by: b.last || '' }); futGoal(side, s, b.last || ''); }
+      else if ((F.sendT -= dt) <= 0) { F.sendT = 0.08; net('ball', { x: rnd2(b.x), y: rnd2(b.y), vx: rnd2(b.vx), vy: rnd2(b.vy) }); }
+    }
+  }
+  F.mesh.position.set(b.x, b.y, 0); F.mesh.rotation.z = b.rot;
+  F.rings.forEach(r => { r.visible = false; });
+  futRing(F, m.me, player.x, player.y, futTeam(m.me));
+  teammates().forEach(r => futRing(F, r.uid, r.x, r.y, futTeam(r.uid)));
+  raceTimer.hidden = false;
+  raceTimer.textContent = 'VERDES ' + F.score[0] + '  -  ' + F.score[1] + ' DORADOS      ' + (F.golden ? 'GOL DE ORO' : fmtTime(Math.max(0, F.left))) + (F.state === 'kick' ? '      Saque en ' + Math.max(1, Math.ceil(F.t)) : '');
+}
+
 // ================= Modo Jefes (en línea): 3 jefes seguidos en equipo =================
 const JEFES = [
   { type: 'boss', name: 'BUG REY', theme: 'fortress', bg: 'fortress', style: 'fortress' },
@@ -2306,6 +2562,10 @@ const ACHIEVEMENTS = [
   { id: 'manos_rapidas', name: 'Manos rápidas', desc: 'Gana 3 batallas de monedas', icon: 'coin', stat: 'battleWins', goal: 3 },
   { id: 'sobreviviente', name: 'Sobreviviente', desc: 'Llega a la oleada 10 en Supervivencia', icon: 'shield', stat: 'survivalBest', goal: 10 },
   { id: 'imparable', name: 'Imparable', desc: 'Llega a la oleada 20 en Supervivencia', icon: 'shield', stat: 'survivalBest', goal: 20 },
+  { id: 'goleador', name: 'Goleador', desc: 'Mete 10 goles en el fútbol en línea', icon: 'ball', stat: 'goals', goal: 10 },
+  { id: 'campeon_futbol', name: 'Campeón de fútbol', desc: 'Gana 3 partidos de fútbol', icon: 'trophy', stat: 'futbolWins', goal: 3 },
+  { id: 'atados', name: 'Inseparables', desc: 'Completa un nivel en el modo Atados', icon: 'rope', stat: 'ropeLevels', goal: 1 },
+  { id: 'lanzador', name: 'Catapulta humana', desc: 'Lanza a tus compañeros 20 veces', icon: 'jump', stat: 'throws', goal: 20 },
   { id: 'companero', name: 'Buen compañero', desc: 'Revive a 10 compañeros', icon: 'heart', stat: 'revives', goal: 10 },
   { id: 'con_estilo', name: 'Con estilo', desc: 'Compra tu primera prenda en la tienda', icon: 'shirt', get: () => wardrobe.owned.length, goal: 1 },
   { id: 'campeon', name: 'Campeón de la semana', desc: 'Queda primero en un ranking semanal', icon: 'trophy', stat: 'champion', goal: 1 },
@@ -2333,6 +2593,8 @@ function mpFinish() {
     if (game.coins > 0) submitScore('batalla', game.coins);
   }
   if (m.mode === 'survival' && m.wave > 0) { maxStat('survivalBest', m.wave); submitScore('supervivencia', m.wave); }
+  if (m.mode === 'atados') addStat('ropeLevels');
+  if (m.mode === 'futbol' && m.fut) { const t = futTeam(m.me), F = m.fut; s.team = t; s.gf = F.score[t]; s.ga = F.score[1 - t]; s.goals = F.goals; s.place = F.score[t] > F.score[1 - t] ? 1 : F.score[t] === F.score[1 - t] ? 2 : 3; s.score = F.goals * 1000 + (s.place === 1 ? 2000 : 0); }
   if (m.mode === 'jefes' && m.jefes) { s.wave = m.jefes.cleared; s.time = Math.round(m.jefes.time || 0); s.place = m.jefes.win ? 1 : 0; }
   if (m.mode === 'party' && m.party) { const t = partyTable(true); s.score = m.party.pts[m.me] | 0; s.place = t.findIndex(x => x.uid === m.me) + 1; s.wins = m.party.wins[m.me] | 0; if (s.place === 1 && t.length >= 2) addStat('partyWins'); }
   if (window.SenaMP) SenaMP.levelDone(s);
@@ -3109,7 +3371,7 @@ function die() {
 }
 // recibir daño: si es grande se encoge, si es pequeño muere
 function damage() {
-  if (player.ghost || player.spect) return;
+  if (player.ghost || player.spect || player.carriedBy) return;
   if (game.mp && game.mp.mode === 'party') {
     const P = pState(); if (player.invT > 0 || !P) return;
     if (PARTY_GAMES[P.g] && PARTY_GAMES[P.g].surv) partyOut();
@@ -3197,7 +3459,7 @@ function doPunch() {
     if (e.alive && dx > -0.1 && dx < 1.7 && Math.abs(e.y - p.y) < 1.1) killEnemy(e, 'flip');
   });
   const P = pState();
-  if (P && P.phase === 'play' && P.g !== 'duelo') teammates().forEach(r => {   // en la fiesta los golpes empujan
+  if ((P && P.phase === 'play' && P.g !== 'duelo') || (game.mp && game.mp.mode === 'futbol')) teammates().forEach(r => {   // en la fiesta y en el fútbol los golpes empujan
     const dx = (r.x - p.x) * p.facing;
     if (!r.ghost && dx > -0.1 && dx < 1.8 && Math.abs(r.y - p.y) < 1.2) { net('ppush', { u: r.uid, d: p.facing }); burstColor(r.x, r.y + 1, 0xffffff, 12, 4); SFX.stomp(); }
   });
@@ -3247,6 +3509,8 @@ const ICONS = {
   coin:     '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5"/>',
   crown:    '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 10H5z"/><path d="M5 21h14"/>',
   bolt:     '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  ball:     '<circle cx="12" cy="12" r="9"/><path d="M12 7.5l3.4 2.5-1.3 4h-4.2l-1.3-4z"/><path d="M12 3v4.5M15.4 10l4.8-1.6M14.1 14l2.9 4.5M9.9 14L7 18.5M8.6 10L3.8 8.4"/>',
+  rope:     '<circle cx="5" cy="7" r="2.5"/><circle cx="19" cy="7" r="2.5"/><path d="M7.5 7.5c2 6 7 6 9 0"/><path d="M5 10v10M19 10v10"/>',
   heart:    '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
   shirt:    '<path d="M8 3l-5 3 2 4 3-1v12h8V9l3 1 2-4-5-3a4 4 0 0 1-8 0z"/>',
   cap:      '<path d="M4 14a8 8 0 0 1 16 0z"/><path d="M12 6v2M4 14h17l-1 2H4z"/>',
@@ -3627,6 +3891,7 @@ function updatePlayer(dt) {
     return;
   }
   if (game.state !== 'play') return;
+  if (p.carriedBy && updateCarried(p)) { p.punchT = 0; return; }
 
   for (const k of ['powerCD', 'shieldT', 'slowT', 'powerAnimT']) if (p[k] > 0) p[k] = Math.max(0, p[k] - dt);
   if (pressed.power) usePower();
@@ -3668,13 +3933,14 @@ function updatePlayer(dt) {
     if (p.jumpBuf > 0 && p.coyote > 0 && !p.crouch) {
       p.vy = JUMP + Math.abs(p.vx) * 0.22; p.grounded = false; p.coyote = 0; p.jumpBuf = 0;
       SFX.jump(); play('M_Jump', { loop: false, fade: 0.05 });
-    } else if (pressed.jump && !p.grounded && p.coyote <= 0 && p.airJumps > 0 && !p.crouch && curPowerId() === 'Intructor' && powerUnlocked('Intructor')) doubleJump(p);
+    } else if (pressed.jump && !p.grounded && p.ropeHangT > 0 && p.ropeJumpT <= 0) { p.vy = JUMP * 0.8; p.ropeJumpT = 0.35; SFX.jump(); play('M_Jump', { loop: false, fade: 0.05 }); }   // trepar la cuerda
+    else if (pressed.jump && !p.grounded && p.coyote <= 0 && p.airJumps > 0 && !p.crouch && curPowerId() === 'Intructor' && powerUnlocked('Intructor')) doubleJump(p);
     const lg = inLowGrav(p.x), g = ((p.vy > 0 && jumpHeld) ? GRAV : GRAV * 1.8) * (lg ? 0.32 : 1);
     p.vy = Math.max(-MAXFALL * (lg ? 0.45 : 1), p.vy - g * dt);
     }
 
     if (pressed.down && !p.grounded && !WATER_LVL) { p.pound = true; p.poundT = 0; p.vx = 0; p.vy = 0; play('M_GroundPound', { loop: false, fade: 0.05, speed: 1.35 }); SFX.punch(); }
-    if (pressed.punch && p.punchT <= 0 && !p.crouch && !p.pound) { p.punchT = 0.45; p.punchHit = false; play('M_Punch', { loop: false, fade: 0.05, speed: 1.4 }); SFX.punch(); }
+    if (pressed.punch && p.punchT <= 0 && !p.crouch && !p.pound && !teamGrabPress(p)) { p.punchKick = false; p.punchT = 0.45; p.punchHit = false; play('M_Punch', { loop: false, fade: 0.05, speed: 1.4 }); SFX.punch(); }
   }
   if (p.dashT > 0) { p.dashT -= dt; p.vx = p.facing * 21; p.vy = 0; p.pound = false; dashTrail(p); if (p.dashT <= 0) p.vx = p.facing * 9; }
   if (p.punchT > 0) { p.punchT -= dt; if (!p.punchHit && p.punchT < 0.3) { p.punchHit = true; doPunch(); } }
@@ -3705,6 +3971,8 @@ function updatePlayer(dt) {
       }
     }
   }
+  { const was = p.onHead; p.onHead = null;   // pararse en la cabeza de un compañero
+    if (!p.grounded && p.vy <= 0 && teamPlayOn()) { const hr = headUnder(p, yPrev, was); if (hr) { p.y = mateTop(hr); p.vy = 0; p.grounded = true; p.onHead = hr.uid; moveX(p, hr.vx * dt); } } }
   if (r && r.head) hitBlock(r.tx, r.ty, p.big);   // pequeño solo golpea; grande rompe ladrillos
   if (p.grounded && !wasGround) {
     if (p.pound) { p.pound = false; poundLand(); }
@@ -3714,6 +3982,7 @@ function updatePlayer(dt) {
   p.landT -= dt; p.invT -= dt;
   const cpx = levelSpec(game.level).checkpoint;
   if (p.x > cpx && game.checkpoint < cpx) { game.checkpoint = cpx; toast('CHECKPOINT', 1000); }
+  if (game.mp && game.mp.mode === 'atados') ropeConstrain(p, dt);
   if (p.y < (levelSpec(game.level).deathY ?? -3)) { if (levelSpec(game.level).lava) spawnFrag(p.x, 1, MAT.lava, 8, 5); die(); }
   if (p.x >= FLAGX + 0.1 && p.y < 12) startWin();
 
@@ -3900,7 +4169,7 @@ function update(dt) {
   const ty = Math.max(4.6, Math.min(levelSpec(game.level).cave ? 6.8 : 10, player.y + 2.1));
   camY += (ty - camY) * Math.min(1, dt * 3);
   shake *= Math.exp(-8 * dt);
-  camera.position.set(camX + (Math.random() - 0.5) * shake, camY + 0.8 + (Math.random() - 0.5) * shake, 10.5);
+  camera.position.set(camX + (Math.random() - 0.5) * shake, camY + 0.8 + (Math.random() - 0.5) * shake, game.mp && game.mp.mode === 'futbol' ? 13 : 10.5);   // en el fútbol se ve más cancha
   camera.lookAt(camX, camY, 0);
   sun.position.set(camX + 6, 16, 12); sun.target.position.set(camX, 2, 0);
   updateBackdrop(camX, camY);
@@ -4375,7 +4644,7 @@ Promise.all(enemyEntries.map(name =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, lasers: () => lasers.map(l => ({ x: l.x, on: l.on })), lowgrav: () => lowgrav.slice(), mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), specAt: (w, i) => levelSpec(i, w), partyRound, blockMat: (x, y) => { const m = blockMesh[x + ',' + y]; return m ? (m.material === MAT.quiz ? 'quiz' : m.material === MAT.question ? 'question' : 'otro') : null; }, gridAt: (x, y) => grid[x] && grid[x][y], boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
+  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, ropes: () => ropeMeshes.size, lasers: () => lasers.map(l => ({ x: l.x, on: l.on })), lowgrav: () => lowgrav.slice(), mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), specAt: (w, i) => levelSpec(i, w), partyRound, blockMat: (x, y) => { const m = blockMesh[x + ',' + y]; return m ? (m.material === MAT.quiz ? 'quiz' : m.material === MAT.question ? 'question' : 'otro') : null; }, gridAt: (x, y) => grid[x] && grid[x][y], boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
     remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName, cos: r.cos || '', acc: (() => { let n = 0; if (r.model) r.model.traverse(o => { if (o.userData.isAcc) n++; }); return n; })() })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
