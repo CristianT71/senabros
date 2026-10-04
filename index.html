@@ -213,6 +213,24 @@
   <!-- Fiesta de minijuegos: presentación de cada ronda, resultados y podio -->
   <div id="pLight" hidden><i class="r"></i><i class="y"></i><i class="g"></i></div>
   <div id="partyBox" hidden><div class="pb-card"><small id="pbRound"></small><b id="pbName"></b><p id="pbRule"></p><div id="pbBody"></div><span id="pbCount"></span></div></div>
+  <!-- Tutorial de 1 minuto -->
+  <div id="tuto" hidden><span id="tutoStep">TUTORIAL</span><p id="tutoText"></p><button id="tutoSkip" type="button">Saltar tutorial</button></div>
+  <!-- Perfil de otro jugador -->
+  <div id="playerCard" hidden>
+    <div class="pc-card">
+      <button id="pcClose" type="button" class="pc-x" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div class="pc-left"><canvas id="pcView"></canvas><div id="pcOutfit" class="pc-outfit"></div></div>
+      <div class="pc-right">
+        <div class="pc-head"><span id="pcDot" class="pdot"></span><div><b id="pcName">-</b><small id="pcSub"></small></div></div>
+        <div id="pcCrowns" class="pc-crowns"></div>
+        <div id="pcStats" class="pc-stats"></div>
+        <div class="ptitle">Logros <span id="pcAchN"></span></div>
+        <div id="pcAch" class="pc-ach"></div>
+        <div id="pcActions" class="pc-actions"></div>
+        <div id="pcMsg" class="msg"></div>
+      </div>
+    </div>
+  </div>
   <!-- Pregunta de programación (bloque </>) -->
   <div id="quiz" role="dialog" aria-modal="true" aria-labelledby="qzQ">
     <div class="qz-card">
@@ -412,6 +430,7 @@
       <div class="ts-sec">SONIDO</div>
       <label>Música <b id="vMusic">45%</b><input type="range" id="sMusic" min="0" max="100" step="5"></label>
       <small class="ts-note">La tecla M silencia todo el sonido.</small>
+      <div class="ts-row"><button id="sTuto" type="button">Ver el tutorial otra vez</button></div>
       <div class="touch-only ts-sec">CONTROLES</div>
       <label class="touch-only">Tamaño de la cruceta <b id="vPad">100%</b><input type="range" id="sPad" min="60" max="160" step="5"></label>
       <label class="touch-only">Tamaño de los botones <b id="vBtn">100%</b><input type="range" id="sBtn" min="60" max="160" step="5"></label>
@@ -456,6 +475,7 @@
   <script src="js/multiplayer.js"></script>
   <script src="js/premios.js"></script>
   <script src="js/editor.js"></script>
+  <script src="js/perfil.js"></script>
   <script>/* authFallback */setTimeout(function(){var a=document.getElementById("authScreen");if(a&&a.classList.contains("checking"))a.classList.remove("checking")},9000)</script>
 </body>
 </html>

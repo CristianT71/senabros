@@ -257,7 +257,7 @@ async function renderPanel() {
       onclick: async () => { const n = await SenaOnline.likeLevel(x.code, !x.liked); if (n != null) { x.liked = !x.liked; x.likes = n; like.className = 'mini like' + (x.liked ? ' on' : ''); like.innerHTML = heart(x.liked) + ' ' + n; } } });
     return el('div', { class: 'ed-row' },
       el('span', { class: 'ed-face' }, img),
-      el('div', { class: 'ed-info' }, el('b', {}, x.title), el('small', {}, 'de ' + x.author + ' · ' + THEME_NAME(x.theme) + ' · ' + x.plays + ' partidas · ' + x.clears + ' lo superaron'), el('code', {}, x.code)),
+      el('div', { class: 'ed-info' }, el('b', {}, x.title), el('small', { class: 'clickable', 'data-profile': x.author, title: 'Ver perfil del autor' }, 'de ' + x.author + ' · ' + THEME_NAME(x.theme) + ' · ' + x.plays + ' partidas · ' + x.clears + ' lo superaron'), el('code', {}, x.code)),
       like,
       el('button', { type: 'button', class: 'mini ok', onclick: () => playCommunity(x.code) }, 'Jugar'),
       x.mine ? el('button', { type: 'button', class: 'mini danger', onclick: async () => { if (!confirm('¿Borrar "' + x.title + '" de la comunidad?')) return; const e = await SenaOnline.deleteLevel(x.code); if (e) msg(e); renderPanel(); } }, 'Borrar') : null);

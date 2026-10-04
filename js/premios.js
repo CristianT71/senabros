@@ -64,7 +64,7 @@ async function renderRank() {
     const gap = i > 0 && x.rank > r.rows[i - 1].rank + 1;
     const img = el('img', { alt: '' }); img.src = (window.PORTRAITS && PORTRAITS[x.character_name]) || '';
     const pos = x.rank === 1 ? el('span', { class: 'rk-pos crown', html: SENA_ICON('crown', 22) }) : el('span', { class: 'rk-pos' }, String(x.rank));
-    return el('div', { class: 'rk-row' + (x.rank <= 3 ? ' r' + x.rank : '') + (x.me ? ' me' : '') + (gap ? ' gap' : '') },
+    return el('div', { class: 'rk-row clickable' + (x.rank <= 3 ? ' r' + x.rank : '') + (x.me ? ' me' : '') + (gap ? ' gap' : ''), 'data-profile': x.user_id, title: 'Ver perfil' },
       pos, el('span', { class: 'rk-face' }, img), el('b', { class: 'rk-name' }, x.username, x.me ? el('small', {}, ' (tú)') : null), el('span', { class: 'rk-val' }, unit(x.value)));
   }));
   if (rk.weeks === 0 && r.rows.some(x => x.me && x.rank === 1) && window.SENA_STAT_MAX) SENA_STAT_MAX('champion', 1);

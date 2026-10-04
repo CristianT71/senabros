@@ -1175,6 +1175,7 @@ function startLevel(i) {
   overlay.classList.remove('show');
   worldLabel.textContent = i === -2 ? 'CREADO' : i < 0 ? L.name : (game.world + 1) + '-' + (i + 1);
   toast(i < 0 ? L.name.toUpperCase() : (game.world + 1) + '-' + (i + 1) + '  ' + L.name.toUpperCase(), 1600);
+  if (i === 0 && game.world === 0) setTimeout(() => tutoStart(false), 1800); else if (TUTO.on) tutoEnd();
 }
 function startGame() { startLevel(game.level); }   // reiniciar el nivel actual (R)
 // transición de círculo verde: cubre la pantalla, ejecuta fn y se abre
@@ -2205,13 +2206,14 @@ function boneFrame(skin, names) {
   }
   if (!isFinite(min.x)) return null;
   const q = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(right, up, fwd));
-  return { bone: bones[main], q, min, max, size: new T.Vector3().subVectors(max, min), center: new T.Vector3().addVectors(min, max).multiplyScalar(0.5) };
+  return { bone: bones[main].name, q, min, max, size: new T.Vector3().subVectors(max, min), center: new T.Vector3().addVectors(min, max).multiplyScalar(0.5) };
 }
+const FIT = new WeakMap();   // por geometría: las copias (SkeletonUtils.clone) de un personaje la comparten
 function rigFit(root) {
-  if (root.userData.fit) return root.userData.fit;
   let skin = null; root.traverse(o => { if (o.isSkinnedMesh && !skin) skin = o; });
   if (!skin) return null;
-  return (root.userData.fit = { head: boneFrame(skin, ['Head']), chest: boneFrame(skin, ['UpperChest', 'Chest']) });
+  if (!FIT.has(skin.geometry)) FIT.set(skin.geometry, { head: boneFrame(skin, ['Head']), chest: boneFrame(skin, ['UpperChest', 'Chest']) });
+  return FIT.get(skin.geometry);
 }
 const accMat = (color, o = {}) => new T.MeshStandardMaterial(Object.assign({ color, roughness: 0.55 }, o));
 const ACC_MATS = {};
@@ -2298,7 +2300,7 @@ function dressModel(root, eq) {
   let skin = null; root.traverse(o => { if (o.isSkinnedMesh && !skin) skin = o; });
   ['cabeza', 'cara', 'espalda'].forEach(slot => {
     const id = eq[slot], f = slot === 'espalda' ? fit.chest : fit.head; if (!id || !f) return;
-    const bone = skin.skeleton.bones.find(b => b.name === f.bone.name); if (!bone) return;
+    const bone = skin.skeleton.bones.find(b => b.name === f.bone); if (!bone) return;
     const holder = new T.Group(); holder.userData.isAcc = true; holder.quaternion.copy(f.q);
     holder.add(buildAcc(id, f)); bone.add(holder);
   });
@@ -2627,6 +2629,97 @@ function updateEmote(dt) {
 window.SENA_EMOTE = doEmote;
 window.SENA_EMOTES = EMOTES;
 
+
+// ================= Vista 3D de otro jugador (perfil) =================
+// Un renderizador pequeño aparte: el instructor del jugador con su ropa, girando despacio.
+const PREV = { r: null, scene: null, cam: null, model: null, mixer: null, raf: 0, t: 0 };
+async function previewMount(canvas, file, eq) {
+  previewUnmount();
+  const g = await getChar(file).catch(() => null); if (!g || !canvas.isConnected) return;
+  const r = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(canvas.clientWidth, canvas.clientHeight, false);
+  r.outputEncoding = T.sRGBEncoding; r.toneMapping = T.ACESFilmicToneMapping; r.toneMappingExposure = 1.15;
+  const sc = new T.Scene(), cam = new T.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.1, 50);
+  cam.position.set(0, 1.0, 4.2); cam.lookAt(0, 0.85, 0);
+  sc.add(new T.HemisphereLight(0xffffff, 0x445566, 1.0));
+  const key = new T.DirectionalLight(0xffffff, 1.4); key.position.set(2, 3, 4); sc.add(key);
+  const rim = new T.DirectionalLight(0x9ad7ff, 0.8); rim.position.set(-3, 2, -2); sc.add(rim);
+  const m = T.SkeletonUtils.clone(g.scene); m.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+  dressModel(m, eq || {});
+  m.scale.setScalar(SIZE.big.scale * 1.05); m.rotation.y = -Math.PI / 2; sc.add(m);
+  const pad = new T.Mesh(new T.CylinderGeometry(0.75, 0.8, 0.12, 40), new T.MeshStandardMaterial({ color: 0x39a900, roughness: 0.6 })); pad.position.y = -0.06; sc.add(pad);
+  const mixer = new T.AnimationMixer(m), clips = g.animations.filter(c => c.name.startsWith('M_'));
+  const idle = clips.find(c => c.name === 'M_Idle'), vic = clips.find(c => c.name === 'M_Victory');
+  if (vic) { const a = mixer.clipAction(vic); a.setLoop(T.LoopOnce, 1); a.clampWhenFinished = true; a.play(); mixer.addEventListener('finished', () => { if (idle) mixer.clipAction(idle).reset().fadeIn(0.3).play(); }); }
+  else if (idle) mixer.clipAction(idle).play();
+  Object.assign(PREV, { r, scene: sc, cam, model: m, mixer, t: performance.now() });
+  const loop = now => {
+    if (PREV.r !== r) return;
+    const dt = Math.min(0.05, (now - PREV.t) / 1000); PREV.t = now;
+    mixer.update(dt); m.rotation.y += dt * 0.5; capeSway(m, now / 1000, 0);
+    r.render(sc, cam); PREV.raf = requestAnimationFrame(loop);
+  };
+  PREV.raf = requestAnimationFrame(loop);
+}
+function previewUnmount() {
+  cancelAnimationFrame(PREV.raf);
+  if (PREV.r) { PREV.scene.traverse(o => { if (o.geometry && !FIT.has(o.geometry)) o.geometry.dispose(); }); PREV.r.dispose(); }
+  Object.assign(PREV, { r: null, scene: null, model: null, mixer: null });
+}
+window.SENA_PREVIEW = { mount: previewMount, unmount: previewUnmount };
+// logros que se pueden calcular con el perfil público de otro jugador
+window.SENA_ACH_FOR = (st, done, eq) => ACHIEVEMENTS.filter(a => a.id !== 'poder_total').map(a => {
+  const v = a.id === 'mundo1' ? done[0] | 0 : a.id === 'mundo2' ? done[1] | 0 : a.id === 'mundo3' ? done[2] | 0 : a.id === 'con_estilo' ? (Object.values(eq || {}).some(Boolean) ? 1 : 0) : (st[a.stat] | 0);
+  return { id: a.id, name: a.name, desc: a.desc, icon: a.icon, done: v >= a.goal };
+});
+
+// ================= Tutorial de 1 minuto (la primera vez que juegas el 1-1) =================
+const TUTO_KEY = 'senabros_tuto';
+const TUTO = { on: false, i: 0, t: 0, x0: 0, flags: {} };
+const tutoEl = document.getElementById('tuto');
+const isTouch = () => document.body.classList.contains('touch');
+const kb = k => '<kbd>' + k + '</kbd>';
+const TUTO_STEPS = [
+  { pc: 'Muévete con ' + kb('A') + kb('D') + ' o las flechas', tc: 'Muévete con la cruceta de la izquierda', done: () => Math.abs(player.x - TUTO.x0) > 3 },
+  { pc: 'Salta con ' + kb('Espacio') + '. Mantén ' + kb('Shift') + ' para correr', tc: 'Salta con el botón verde. Arrastra la cruceta al borde para correr', done: () => TUTO.flags.jump },
+  { pc: 'Golpea con ' + kb('J') + ': rompe ladrillos (siendo grande) y derriba bugs', tc: 'Golpea con el botón del puño', done: () => TUTO.flags.punch },
+  { pc: 'Salta y golpea un bloque desde abajo: <b>?</b> da monedas y <b>&lt;/&gt;</b> hace una pregunta de programación', tc: 'Salta y golpea un bloque desde abajo: <b>?</b> da monedas y <b>&lt;/&gt;</b> hace una pregunta', done: () => TUTO.flags.block, max: 14 },
+  { pc: 'Pisa a los bugs (cae encima) o golpéalos para eliminarlos', tc: 'Pisa a los bugs (cae encima) o golpéalos', done: () => TUTO.flags.kill, max: 14 },
+  { pc: 'Tu instructor tiene un poder: ' + kb('K') + '. Cumple su misión (abajo a la izquierda) para desbloquearlo. Gestos: ' + kb('1') + kb('2') + kb('3') + kb('4'), tc: 'Tu instructor tiene un poder (botón del rayo). Cumple su misión para desbloquearlo', done: () => false, max: 7 },
+  { pc: '¡Listo! Llega a la bandera del final. ' + kb('Esc') + ' vuelve al mapa', tc: '¡Listo! Llega a la bandera del final', done: () => false, max: 4 },
+];
+function tutoStart(force) {
+  let seen = false; try { seen = localStorage.getItem(TUTO_KEY) === '1'; } catch (_) {}
+  if ((seen && !force) || game.mp || game.custom || game.challenge) return;
+  Object.assign(TUTO, { on: true, i: 0, t: 0, x0: player.x, flags: {} }); tutoShow();
+}
+function tutoShow() {
+  const st = TUTO_STEPS[TUTO.i];
+  document.getElementById('tutoText').innerHTML = isTouch() ? st.tc : st.pc;
+  document.getElementById('tutoStep').textContent = 'TUTORIAL ' + (TUTO.i + 1) + ' / ' + TUTO_STEPS.length;
+  tutoEl.hidden = false; tutoEl.classList.remove('ok'); void tutoEl.offsetWidth; tutoEl.classList.add('in');
+}
+function tutoEnd() { TUTO.on = false; tutoEl.hidden = true; try { localStorage.setItem(TUTO_KEY, '1'); } catch (_) {} }
+function updateTuto(dt) {
+  if (!TUTO.on) return;
+  if (game.state !== 'play' || game.world !== 0 || game.level !== 0 || game.mp) { if (game.state !== 'play') return; tutoEnd(); return; }
+  const p = player; if (!p.grounded && p.vy > 1) TUTO.flags.jump = true; if (p.punchT > 0) TUTO.flags.punch = true;
+  const st = TUTO_STEPS[TUTO.i]; TUTO.t += dt;
+  if (TUTO.t > 0.6 && (st.done() || (st.max && TUTO.t > st.max))) {
+    tutoEl.classList.add('ok'); SFX.coin();
+    TUTO.i++; TUTO.t = -0.6; TUTO.x0 = p.x;
+    if (TUTO.i >= TUTO_STEPS.length) { setTimeout(tutoEnd, 500); return; }
+    setTimeout(() => { if (TUTO.on) tutoShow(); }, 550);
+  }
+}
+document.getElementById('tutoSkip').onclick = tutoEnd;
+document.getElementById('sTuto').addEventListener('click', () => {   // repetir el tutorial: abre el 1-1
+  try { localStorage.removeItem(TUTO_KEY); } catch (_) {}
+  document.getElementById('tSettings').classList.remove('show'); window.SENA_PAUSED = false;
+  if (inMenu() || game.state === 'map') transition(() => { game.world = 0; MAPN = WORLDS[0].nodes; startLevel(0); });
+});
+window.SENA_TUTO = { start: () => tutoStart(true), state: () => ({ on: TUTO.on, i: TUTO.i }) };
+
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
 window.SENA_LEVELS = () => WORLDS.flatMap((Wd, w) => Array.from({ length: Wd.count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name })));
@@ -2780,6 +2873,7 @@ function killEnemy(e, how) {
   if (e.def.kind === 'boss' && how !== 'boss') return;   // al jefe solo se le vence pisándolo
   if (e.uid != null && e.def.kind !== 'boss') net('kill', { u: e.uid, h: how === 'stomp' ? 1 : 0 });
   e.alive = false; e.deadT = 0; e.mode = how; addScore(e.def.score * (how === 'stomp' ? 1 : 2));
+  if (!netMute) TUTO.flags.kill = true;
   { const P = pState(); if (!netMute && P && P.g === 'caza' && P.phase === 'play') { P.val += e.type === 'archivo-corrupto' ? 2 : 1; toast('+' + (e.type === 'archivo-corrupto' ? 2 : 1), 500); } }
   if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); if (!netMute) { game.runKills = (game.runKills || 0) + 1; addStat('kills'); } }
   if (how === 'stomp') { SFX.stomp(); e.body.scale.y = 0.3 * e.def.scale; spawnFrag(e.x, e.y + 0.3, MAT.stone, 4, 3); }
@@ -2787,6 +2881,7 @@ function killEnemy(e, how) {
 }
 function hitBlock(tx, ty, fromPlayer) {
   let c = grid[tx] && grid[tx][ty]; const key = tx + ',' + ty;
+  if (c === '?' || c === 'M' || c === 'Q') TUTO.flags.block = true;
   if (c === 'Q' && (game.mp || netMute)) c = '?';   // en línea no se pausa a nadie: da moneda
   if (c === 'Q') {
     grid[tx][ty] = 'U'; if (blockMesh[key]) blockMesh[key].material = MAT.used;
@@ -3487,7 +3582,7 @@ function update(dt) {
   }
   const tnow = performance.now() / 1000;
   coins.forEach(c => { if (!c.taken) { c.m.rotation.y = tnow * 2.2 + c.ph; c.m.position.y = c.y + Math.sin(tnow * 3 + c.ph) * 0.08; } });
-  updateRemotes(dt); updateMpFx(dt); updateTrails(dt); updateEmote(dt);
+  updateRemotes(dt); updateMpFx(dt); updateTrails(dt); updateEmote(dt); updateTuto(dt);
   updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateBolts(dt); updateSparks(dt); updatePfx(dt); updatePowerUI();
   if (MAT.lava.map) { MAT.lava.map.offset.x = tnow * 0.05; MAT.lava.map.offset.y = Math.sin(tnow * 0.7) * 0.04; MAT.lava.emissiveIntensity = 0.8 + Math.sin(tnow * 3) * 0.15; }
   if (flag) flag.userData.cloth.rotation.y = Math.sin(tnow * 3) * 0.15;

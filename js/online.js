@@ -293,7 +293,7 @@ function personRow(f, actions) {
   const a = ago(f.last_seen);
   return el('div', { class: 'prow' },
     el('div', { class: 'pdot' + (a.on ? ' on' : '') }),
-    el('div', { class: 'pinfo' }, el('b', {}, f.username), el('small', {}, `${f.player_code} - ${a.text}`)),
+    el('div', { class: 'pinfo clickable', 'data-profile': f.id, title: 'Ver perfil' }, el('b', {}, f.username), el('small', {}, `${f.player_code} - ${a.text}`)),
     el('div', { class: 'pact' }, actions));
 }
 function renderFriends() {
@@ -415,6 +415,9 @@ window.SenaOnline = {
   db,
   openAuth() { showScreen('auth'); },
   refreshFriends: () => loadFriends(),
+  // perfil público de otro jugador (js/perfil.js)
+  async publicProfile(who) { const { data, error } = await db.rpc('get_public_profile', { who }); return error ? { error: friendly(error) } : { profile: (data || [])[0] }; },
+  async addFriendId(id) { const { error } = await db.from('friendships').insert({ requester_id: state.user.id, addressee_id: id }); await loadFriends(); return error ? (error.code === '23505' ? 'Ya existe una solicitud o amistad' : friendly(error)) : null; },
   // niveles de la comunidad (js/editor.js)
   async publishLevel(title, theme, data) { const { data: code, error } = await db.rpc('publish_level', { title, theme, data }); return error ? { error: friendly(error) } : { code }; },
   async listLevels(sort, q) { const { data, error } = await db.rpc('list_levels', { sort, q: q || '' }); return error ? { error: friendly(error) } : { rows: data || [] }; },

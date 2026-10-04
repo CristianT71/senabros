@@ -1055,3 +1055,43 @@ body.quiz-open #touch { display: none !important; }
 .cp-emotes button { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 4px; border-radius: 10px; border: 2px solid #ff7ad9; background: #ff7ad91f; color: #fff; font: 900 13px "Trebuchet MS", sans-serif; cursor: pointer; }
 .cp-emotes button b { width: 20px; height: 20px; border-radius: 6px; background: #ff7ad9; color: #2a1060; display: flex; align-items: center; justify-content: center; font-size: 12px; }
 @media (max-height: 520px) { .cp-emotes { margin-bottom: 5px; gap: 4px; } .cp-emotes button { padding: 4px 2px; font-size: 11px; } }
+
+/* ================= Tutorial ================= */
+#tuto { position: fixed; top: 112px; left: 50%; transform: translateX(-50%); z-index: 7; width: min(560px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 16px 12px; border-radius: 16px; background: #0b1f10f0; border: 3px solid var(--gold); box-shadow: 0 6px 0 var(--ink), 0 0 30px #ffd23f44; text-align: center; }
+#tuto[hidden] { display: none; }
+#tuto.in { animation: pop .35s both; } #tuto.ok { border-color: #39d98a; box-shadow: 0 6px 0 var(--ink), 0 0 30px #39d98a88; }
+#tutoStep { font: 900 11px "Trebuchet MS", sans-serif; letter-spacing: 3px; color: var(--gold); }
+#tutoText { margin: 0; font-size: 16px; font-weight: 800; line-height: 1.45; color: #fff; }
+#tutoText kbd { margin: 0 2px; }
+#tutoSkip { padding: 3px 10px; border-radius: 8px; border: 1px solid #ffffff44; background: transparent; color: #bcd6b4; font: 700 11px "Trebuchet MS", sans-serif; cursor: pointer; pointer-events: auto; }
+body.touch #tuto { top: 64px; }
+@media (max-height: 520px) { #tuto { top: 58px; padding: 6px 12px 8px; } #tutoText { font-size: 13px; } }
+
+/* ================= Perfil de otro jugador ================= */
+#playerCard { position: fixed; inset: 0; z-index: 35; display: flex; align-items: center; justify-content: center; padding: 12px; background: #000b; }
+#playerCard[hidden] { display: none; }
+.pc-card { position: relative; width: min(820px, 96vw); max-height: 94vh; overflow-y: auto; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; padding: 16px;
+  border-radius: 20px; background: linear-gradient(180deg, #0d2a14f5, #061309f5); border: 3px solid var(--sena); box-shadow: 0 8px 0 var(--ink), 0 20px 60px #000c; animation: pop .3s both; }
+.pc-x { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 10px; border: 2px solid #ffffff33; background: #0006; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; }
+.pc-left { display: flex; flex-direction: column; gap: 8px; }
+#pcView { width: 100%; height: 330px; border-radius: 16px; background: radial-gradient(ellipse at 50% 70%, #2a5a20, #0a1a0c 70%); border: 2px solid #ffffff22; }
+.pc-outfit { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.pc-outfit span { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 8px; background: #ffffff12; font-size: 11px; font-weight: 800; color: #d7e9d0; }
+.pc-outfit span svg { color: var(--gold); }
+.pc-head { display: flex; align-items: center; gap: 10px; padding-right: 40px; } .pc-head b { display: block; font-size: 24px; } .pc-head small { font-size: 12px; color: #bcd6b4; font-weight: 700; }
+.pc-crowns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pc-crowns span { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 10px; background: #ffd23f26; border: 1px solid var(--gold); color: var(--gold); font: 900 11px "Trebuchet MS", sans-serif; }
+.pc-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.pc-stats div { padding: 8px 6px; border-radius: 12px; background: #ffffff0d; text-align: center; } .pc-stats b { display: block; font-size: 18px; color: var(--gold); } .pc-stats small { font-size: 10px; color: #bcd6b4; font-weight: 800; }
+.pc-ach { display: flex; flex-wrap: wrap; gap: 6px; }
+.pc-ach span { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: #ffffff0d; color: #5a6a56; }
+.pc-ach span.on { background: radial-gradient(circle, #ffd23f55, #ffd23f18); color: var(--gold); }
+.pc-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.pc-actions small { align-self: center; color: #bcd6b4; font-weight: 800; }
+.clickable { cursor: pointer; } .clickable:hover b, .clickable:hover .rk-name { text-decoration: underline; }
+@media (max-width: 700px), (max-height: 520px) {
+  .pc-card { grid-template-columns: 1fr; } #pcView { height: 220px; }
+  .pc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-height: 520px) { .pc-card { grid-template-columns: 200px minmax(0, 1fr); } #pcView { height: 240px; } .pc-head b { font-size: 18px; } }

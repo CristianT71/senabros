@@ -60,7 +60,7 @@ function renderRoom() {
     const badges = el('div', { class: 'sbadges' });
     if (i === 0) badges.append(el('span', { class: 'host' }, 'Anfitrión'));
     if (p.uid === meId) badges.append(el('span', { class: 'you' }, 'Tú'));
-    slots.push(el('div', { class: 'slot' + (p.uid === meId ? ' mine' : '') }, badges, el('div', { class: 'sframe' }, img),
+    slots.push(el('div', { class: 'slot clickable' + (p.uid === meId ? ' mine' : ''), 'data-profile': p.uid, title: 'Ver perfil' }, badges, el('div', { class: 'sframe' }, img),
       el('b', {}, (st.champs && st.champs.has(p.uid)) ? el('span', { class: 'champ', title: 'Campeón de la semana', html: SENA_ICON('crown', 16) }) : '', p.name), p.st === 'play' ? el('small', { class: 'ingame' }, 'En el nivel') : el('small', {}, charLabel(p.char))));
   }
   $('mpSlots').replaceChildren(...slots);
@@ -91,7 +91,7 @@ function renderFriends() {
   box.replaceChildren(...fr.map(f => {
     const on = SenaOnline.isOnline(f.last_seen);
     const action = inRoom.has(f.id) ? el('small', {}, 'en la sala') : el('button', { class: 'mini ok', onclick: e => invite(f, e.target) }, 'Invitar');
-    return el('div', { class: 'prow' }, el('div', { class: 'pdot' + (on ? ' on' : '') }), el('div', { class: 'pinfo' }, el('b', {}, f.username), el('small', {}, on ? 'conectado' : 'desconectado')), el('div', { class: 'pact' }, action));
+    return el('div', { class: 'prow' }, el('div', { class: 'pdot' + (on ? ' on' : '') }), el('div', { class: 'pinfo clickable', 'data-profile': f.id, title: 'Ver perfil' }, el('b', {}, f.username), el('small', {}, on ? 'conectado' : 'desconectado')), el('div', { class: 'pact' }, action));
   }));
 }
 function renderResults() {
