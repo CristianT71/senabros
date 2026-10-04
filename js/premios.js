@@ -106,7 +106,7 @@ function renderShop() {
   $('shopTabs').replaceChildren(...SENA_SHOP.slots.map(k => el('button', { type: 'button', class: k === shop.slot ? 'on' : '', onclick: () => { shop.slot = k; renderShop(); } }, SLOT_NAME[k])));
   $('shopGrid').replaceChildren(...SENA_SHOP.items.filter(i => i.slot === shop.slot).map(i => {
     const has = owned.has(i.id), on = eq[i.slot] === i.id;
-    const tag = on ? el('span', { class: 'tag on' }, 'Puesto') : has ? el('span', { class: 'tag' }, 'Tuyo') : el('span', { class: 'tag price' + (coins < i.price ? ' poor' : '') }, el('i', { class: 'coin-ico sm' }), fmt(i.price));
+    const tag = on ? el('span', { class: 'tag on' }, 'Puesto') : has ? el('span', { class: 'tag' }, 'Tuyo') : (i.price === 0 ? el('span', { class: 'tag free' }, 'Gratis') : el('span', { class: 'tag price' + (coins < i.price ? ' poor' : '') }, el('i', { class: 'coin-ico sm' }), fmt(i.price)));
     const card = el('button', { type: 'button', class: 'item' + (i.pro ? ' pro' : '') + (shop.sel && shop.sel.id === i.id ? ' sel' : '') + (on ? ' worn' : ''), onclick: () => { shop.sel = i; SENA_SHOP.preview(shopEq()); renderShop(); } },
       el('span', { class: 'item-ico', style: '--tint:' + ITEM_TINT[i.id] }, icon(ITEM_ICON[i.id], 34)), el('b', {}, i.name), tag);
     return card;
@@ -115,11 +115,12 @@ function renderShop() {
   if (!s) { $('shopSelName').textContent = 'Elige una prenda'; $('shopSelInfo').textContent = 'Tócala para probártela.'; btn.disabled = true; btn.textContent = 'COMPRAR'; return; }
   $('shopSelName').textContent = s.name;
   const has = owned.has(s.id), on = eq[s.slot] === s.id;
-  $('shopSelInfo').textContent = s.slot === 'estela' ? 'Se ve detrás de ti cuando corres.' : has ? (on ? 'La tienes puesta.' : 'Ya es tuya.') : 'Cuesta ' + fmt(s.price) + ' monedas.';
+  $('shopSelInfo').textContent = s.slot === 'estela' ? 'Se ve detrás de ti cuando corres.' : has ? (on ? 'La tienes puesta.' : 'Ya es tuya.') : s.price === 0 ? 'Es gratis: tómala.' : 'Cuesta ' + fmt(s.price) + ' monedas.';
   btn.disabled = shop.busy;
   if (!loggedIn()) { btn.textContent = 'INICIA SESIÓN'; btn.disabled = false; return; }
   if (on) btn.textContent = 'QUITAR';
   else if (has) btn.textContent = 'USAR';
+  else if (s.price === 0) btn.textContent = 'OBTENER GRATIS';
   else if (coins >= s.price) btn.textContent = 'COMPRAR ' + fmt(s.price);
   else { btn.textContent = 'TE FALTAN ' + fmt(s.price - coins); btn.disabled = true; }
 }

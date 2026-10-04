@@ -2166,28 +2166,28 @@ function mpFinish() {
 // ---------- Tienda: ropa 3D que se ajusta a la cabeza y la espalda de cada instructor ----------
 const SHOP = [
   // modeladas en Blender (assets/modelos/ropa/<id>.glb)
-  { id: 'mago', slot: 'cabeza', name: 'Sombrero de mago', price: 1200, pro: true },
-  { id: 'vikingo', slot: 'cabeza', name: 'Casco vikingo', price: 1600, pro: true },
-  { id: 'copa', slot: 'cabeza', name: 'Sombrero de copa', price: 1000, pro: true },
-  { id: 'gato', slot: 'cabeza', name: 'Orejas de gato', price: 900, pro: true },
-  { id: 'aureola', slot: 'cabeza', name: 'Aureola', price: 1800, pro: true },
-  { id: 'visor', slot: 'cara', name: 'Visor cyber', price: 1300, pro: true },
-  { id: 'alas', slot: 'espalda', name: 'Alas de ángel', price: 2500, pro: true },
-  { id: 'jetpack', slot: 'espalda', name: 'Jetpack', price: 2200, pro: true },
+  { id: 'mago', slot: 'cabeza', name: 'Sombrero de mago', price: 350, pro: true },
+  { id: 'vikingo', slot: 'cabeza', name: 'Casco vikingo', price: 450, pro: true },
+  { id: 'copa', slot: 'cabeza', name: 'Sombrero de copa', price: 300, pro: true },
+  { id: 'gato', slot: 'cabeza', name: 'Orejas de gato', price: 250, pro: true },
+  { id: 'aureola', slot: 'cabeza', name: 'Aureola', price: 500, pro: true },
+  { id: 'visor', slot: 'cara', name: 'Visor cyber', price: 350, pro: true },
+  { id: 'alas', slot: 'espalda', name: 'Alas de ángel', price: 700, pro: true },
+  { id: 'jetpack', slot: 'espalda', name: 'Jetpack', price: 600, pro: true },
   // clásicas
-  { id: 'gorra', slot: 'cabeza', name: 'Gorra SENA', price: 150 },
-  { id: 'casco', slot: 'cabeza', name: 'Casco de obra', price: 300 },
-  { id: 'audifonos', slot: 'cabeza', name: 'Audífonos', price: 450 },
-  { id: 'vueltiao', slot: 'cabeza', name: 'Sombrero vueltiao', price: 800 },
-  { id: 'corona', slot: 'cabeza', name: 'Corona', price: 2000 },
-  { id: 'gafas_sol', slot: 'cara', name: 'Gafas de sol', price: 200 },
-  { id: 'gafas_dev', slot: 'cara', name: 'Gafas de programador', price: 250 },
-  { id: 'mochila', slot: 'espalda', name: 'Mochila', price: 350 },
-  { id: 'capa_roja', slot: 'espalda', name: 'Capa roja', price: 600 },
-  { id: 'capa_sena', slot: 'espalda', name: 'Capa SENA', price: 700 },
-  { id: 'estela_verde', slot: 'estela', name: 'Estela verde', price: 300 },
-  { id: 'estela_dorada', slot: 'estela', name: 'Estela dorada', price: 900 },
-  { id: 'estela_arcoiris', slot: 'estela', name: 'Estela arcoíris', price: 1500 },
+  { id: 'gorra', slot: 'cabeza', name: 'Gorra SENA', price: 0 },
+  { id: 'casco', slot: 'cabeza', name: 'Casco de obra', price: 0 },
+  { id: 'audifonos', slot: 'cabeza', name: 'Audífonos', price: 120 },
+  { id: 'vueltiao', slot: 'cabeza', name: 'Sombrero vueltiao', price: 200 },
+  { id: 'corona', slot: 'cabeza', name: 'Corona', price: 500 },
+  { id: 'gafas_sol', slot: 'cara', name: 'Gafas de sol', price: 0 },
+  { id: 'gafas_dev', slot: 'cara', name: 'Gafas de programador', price: 0 },
+  { id: 'mochila', slot: 'espalda', name: 'Mochila', price: 0 },
+  { id: 'capa_roja', slot: 'espalda', name: 'Capa roja', price: 150 },
+  { id: 'capa_sena', slot: 'espalda', name: 'Capa SENA', price: 180 },
+  { id: 'estela_verde', slot: 'estela', name: 'Estela verde', price: 0 },
+  { id: 'estela_dorada', slot: 'estela', name: 'Estela dorada', price: 250 },
+  { id: 'estela_arcoiris', slot: 'estela', name: 'Estela arcoíris', price: 450 },
 ];
 const SLOTS = ['cabeza', 'cara', 'espalda', 'estela'];
 const shopItem = id => SHOP.find(i => i.id === id);
@@ -2675,13 +2675,15 @@ async function previewMount(canvas, file, eq) {
   r.setPixelRatio(Math.min(devicePixelRatio, 2)); r.setSize(canvas.clientWidth, canvas.clientHeight, false);
   r.outputEncoding = T.sRGBEncoding; r.toneMapping = T.ACESFilmicToneMapping; r.toneMappingExposure = 1.15;
   const sc = new T.Scene(), cam = new T.PerspectiveCamera(30, canvas.clientWidth / canvas.clientHeight, 0.1, 50);
-  cam.position.set(0, 1.0, 4.2); cam.lookAt(0, 0.85, 0);
+  cam.position.set(0, 1.15, 4.8); cam.lookAt(0, 0.98, 0);
   sc.add(new T.HemisphereLight(0xffffff, 0x445566, 1.0));
   const key = new T.DirectionalLight(0xffffff, 1.4); key.position.set(2, 3, 4); sc.add(key);
   const rim = new T.DirectionalLight(0x9ad7ff, 0.8); rim.position.set(-3, 2, -2); sc.add(rim);
   const m = T.SkeletonUtils.clone(g.scene); m.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
   dressModel(m, eq || {});
-  m.scale.setScalar(SIZE.big.scale * 1.05); m.rotation.y = -Math.PI / 2; sc.add(m);
+  m.position.set(0, 0, 0); m.rotation.set(0, -Math.PI / 2, 0); m.visible = true;   // la copia trae la posición del juego: centrarla
+  m.traverse(o => { o.visible = true; });
+  m.scale.setScalar(SIZE.big.scale * 1.05); sc.add(m);
   const pad = new T.Mesh(new T.CylinderGeometry(0.75, 0.8, 0.12, 40), new T.MeshStandardMaterial({ color: 0x39a900, roughness: 0.6 })); pad.position.y = -0.06; sc.add(pad);
   const mixer = new T.AnimationMixer(m), clips = g.animations.filter(c => c.name.startsWith('M_'));
   const idle = clips.find(c => c.name === 'M_Idle'), vic = clips.find(c => c.name === 'M_Victory');
