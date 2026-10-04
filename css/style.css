@@ -1125,3 +1125,24 @@ body.touch #tuto { top: 64px; }
 .sub-dot[hidden] { display: none; }
 @media (max-width: 760px) { .dl-list { grid-template-columns: 1fr; } }
 @media (max-height: 520px) { .daily { padding: 6px 10px; gap: 5px; } .dl-m { padding: 5px 8px; } .dl-txt b { font-size: 11px; } }
+
+/* ================= Grupos ================= */
+.gr-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.gr-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 2px solid #ffffff22; background: #ffffff0d; color: #fff; text-align: left; cursor: pointer; font-family: inherit; }
+.gr-item:hover { border-color: var(--gold); } .gr-item b { font-size: 16px; } .gr-item small { color: #bcd6b4; font-weight: 700; }
+.gr-forms { display: flex; flex-direction: column; gap: 6px; }
+.gr-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; } .gr-head b { font-size: 18px; color: var(--gold); } .gr-head code { font: 900 13px monospace; color: #bcd6b4; }
+.gr-head #grLeave { margin-left: auto; }
+.gr-body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.gr-col { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gr-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; letter-spacing: 2px; font-weight: 900; color: var(--sena-l); text-transform: uppercase; }
+.gr-sub select { padding: 4px 6px; border-radius: 8px; border: 2px solid #ffffff44; background: #04100a; color: #fff; font: 700 12px "Trebuchet MS", sans-serif; letter-spacing: 0; text-transform: none; }
+.gr-board { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
+.gr-row { display: grid; grid-template-columns: 28px 12px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; background: #ffffff0d; }
+.gr-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .gr-row.me { outline: 2px dashed #fff; outline-offset: -3px; }
+.gr-row.t1 { background: #ffd23f2a; } .gr-pos { text-align: center; font-weight: 900; color: #d7e9d0; display: flex; justify-content: center; } .gr-row.t1 .gr-pos { color: var(--gold); }
+.gr-val { font-weight: 900; color: var(--gold); }
+.gr-chat { height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 12px; background: #0007; border: 2px solid #ffffff1f; }
+.gr-msg { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 13px; } .gr-msg b { color: var(--gold); } .gr-msg.mine b { color: #39d98a; }
+.gr-msg span { overflow-wrap: anywhere; } .gr-msg small { margin-left: auto; font-size: 10px; color: #8fb3a0; }
+@media (max-width: 760px), (max-height: 520px) { .gr-body { grid-template-columns: 1fr; } .gr-chat { height: 160px; } .gr-board { max-height: 180px; } }

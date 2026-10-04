@@ -290,6 +290,7 @@
         <div class="subtabs">
           <button id="stFriends" type="button" class="on">Amigos</button>
           <button id="stChallenges" type="button">Retos <i id="chBadge" hidden></i></button>
+          <button id="stGroups" type="button">Grupos</button>
           <button id="stSecurity" type="button">Seguridad</button>
         </div>
         <div class="pbody">
@@ -312,6 +313,25 @@
             </div>
             <div id="chList"></div>
             <button id="chRefresh" type="button" class="linkbtn">Actualizar</button>
+          </div>
+          <div id="secGroups" hidden>
+            <div id="grHome">
+              <div class="ptitle">Mis grupos</div>
+              <div id="grList" class="gr-list"></div>
+              <div class="frow gr-forms">
+                <div class="srow"><input id="grName" type="text" maxlength="30" placeholder="Nombre (ej: Ficha 2758 ADSO)" spellcheck="false"><button id="grCreate" type="button" class="mini ok big">Crear grupo</button></div>
+                <div class="srow"><input id="grCode" type="text" maxlength="9" placeholder="Código GR-XXXXX" spellcheck="false" autocapitalize="characters"><button id="grJoin" type="button" class="mini big">Unirme</button></div>
+              </div>
+            </div>
+            <div id="grDetail" hidden>
+              <div class="gr-head"><button id="grBack" type="button" class="mini">Mis grupos</button><b id="grTitle"></b><code id="grCodeLbl"></code><button id="grCopy" type="button" class="mini">Copiar código</button><button id="grLeave" type="button" class="mini danger">Salir</button></div>
+              <div class="gr-body">
+                <div class="gr-col"><div class="gr-sub">Tabla del grupo <select id="grMetric" aria-label="Ordenar por"></select></div><div id="grBoard" class="gr-board"></div></div>
+                <div class="gr-col"><div class="gr-sub">Chat del grupo</div><div id="grChat" class="gr-chat"></div>
+                  <form id="grChatForm" class="cp-row" autocomplete="off"><input id="grInput" type="text" maxlength="200" placeholder="Escribe al grupo..." spellcheck="false"><button type="submit" class="mini ok big">Enviar</button></form></div>
+              </div>
+            </div>
+            <div id="grMsg" class="msg"></div>
           </div>
           <div id="secSecurity" hidden>
             <div class="ptitle">Llave de recuperación</div>
@@ -487,6 +507,7 @@
   <script src="js/premios.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/perfil.js"></script>
+  <script src="js/grupos.js"></script>
   <script>
     // App instalable (PWA): guarda el juego en el dispositivo y permite "Agregar a inicio"
     if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

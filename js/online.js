@@ -287,8 +287,9 @@ function renderProfile() {
 }
 function setSub(name) {
   state.sub = name;
-  for (const [id, key] of [['stFriends', 'friends'], ['stChallenges', 'challenges'], ['stSecurity', 'security']]) $(id).classList.toggle('on', key === name);
-  show('secFriends', name === 'friends'); show('secChallenges', name === 'challenges'); show('secSecurity', name === 'security');
+  for (const [id, key] of [['stFriends', 'friends'], ['stGroups', 'groups'], ['stChallenges', 'challenges'], ['stSecurity', 'security']]) $(id).classList.toggle('on', key === name);
+  show('secFriends', name === 'friends'); show('secGroups', name === 'groups'); show('secChallenges', name === 'challenges'); show('secSecurity', name === 'security');
+  if (name === 'groups' && window.SenaGroups) SenaGroups.open(); else if (window.SenaGroups) SenaGroups.stop();
   if (name === 'challenges') renderChallengeForm();
 }
 function personRow(f, actions) {
@@ -391,6 +392,7 @@ $('acctLogout').onclick = async () => { await pushNow(); await db.auth.signOut()
 $('acctDelete').onclick = deleteAccount;
 $('recGen').onclick = generateCode; $('recAlertGo').onclick = generateCode;
 $('stFriends').onclick = () => setSub('friends'); $('stChallenges').onclick = () => { setSub('challenges'); loadChallenges(); }; $('stSecurity').onclick = () => setSub('security');
+$('stGroups').onclick = () => setSub('groups');
 $('chSend').onclick = sendChallenge; $('chRefresh').onclick = loadChallenges;
 $('fGo').onclick = search;
 $('fSearch').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); search(); } });
