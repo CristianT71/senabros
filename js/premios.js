@@ -77,7 +77,21 @@ $('rankBtn').onclick = () => { fillLevels(); openScr('rankScreen'); renderRank()
 $('rankBack').onclick = closeScr;
 
 // ================= Logros =================
+function renderDaily() {
+  const box = $('dailyBox'); if (!box || !window.SENA_DAILY) return;
+  if (!loggedIn()) { box.replaceChildren(el('div', { class: 'rk-empty wide' }, 'Inicia sesión para hacer las misiones del día y ganar monedas.')); return; }
+  const D = SENA_DAILY(), done = D.missions.filter(m => m.done).length;
+  box.replaceChildren(
+    el('div', { class: 'dl-head' }, el('b', {}, 'MISIONES DEL DÍA'), el('span', { class: 'dl-streak', html: SENA_ICON('flame', 16) + ' Racha: ' + D.streak + (D.streak === 1 ? ' día' : ' días') }), el('small', {}, 'Se renuevan a medianoche')),
+    el('div', { class: 'dl-list' }, ...D.missions.map(m => el('div', { class: 'dl-m' + (m.done ? ' done' : '') },
+      el('span', { class: 'dl-ico', html: SENA_ICON(m.done ? 'star' : m.online ? 'flag' : 'bolt', 22) }),
+      el('div', { class: 'dl-txt' }, el('b', {}, m.text + (m.online ? ' (en línea)' : '')), el('div', { class: 'ach-prog' }, el('i', { style: `width:${Math.round(m.value / m.goal * 100)}%` })), el('small', {}, m.done ? 'Cumplida' : m.value + ' / ' + m.goal)),
+      el('span', { class: 'dl-coins' }, el('i', { class: 'coin-ico sm' }), '+' + m.coins)))),
+    el('div', { class: 'dl-chest' + (D.chest ? ' open' : '') }, el('span', { html: SENA_ICON('trophy', 22) }),
+      el('b', {}, D.chest ? '¡Cofre abierto! Vuelve mañana para seguir la racha' : 'Cumple las 3 y abre el cofre del día: +' + D.chestCoins + ' monedas (' + done + '/3)')));
+}
 function renderAch() {
+  renderDaily();
   const list = SENA_ACHIEVEMENTS(), done = list.filter(a => a.done).length;
   $('achCount').textContent = done + ' de ' + list.length + ' logros';
   $('achBar').style.width = Math.round(done / list.length * 100) + '%';
@@ -89,6 +103,7 @@ function renderAch() {
   if (!loggedIn()) $('achGrid').prepend(el('div', { class: 'rk-empty wide' }, SenaOnline && SenaOnline.isGuest ? 'Como invitado los logros no se guardan. Crea una cuenta para conservarlos.' : 'Inicia sesión para guardar tus logros en la nube.'));
 }
 $('achBtn').onclick = () => { openScr('achScreen'); renderAch(); };
+setInterval(() => { const d = $('dailyDot'); if (!d || !window.SENA_DAILY) return; d.hidden = !(loggedIn() && SENA_DAILY().missions.some(m => !m.done)); }, 3000);
 $('achBack').onclick = closeScr;
 
 // ================= Tienda =================

@@ -281,7 +281,7 @@ async function playCommunity(code) {
   closeEditor();
   SENA_CUSTOM.play(lv, { code, onExit: res => {
     openEditor(); openPanel();
-    if (res.won) { SenaOnline.clearLevel(code); msg('¡Superaste "' + L.title + '" de ' + L.author + '! Si te gustó, dale corazón.', true); }
+    if (res.won) { SenaOnline.clearLevel(code); if (!L.mine && window.SENA_STAT_ADD) SENA_STAT_ADD('communityClears', 1); msg('¡Superaste "' + L.title + '" de ' + L.author + '! Si te gustó, dale corazón.', true); }
   } });
 }
 window.SenaEditor = { playCode: playCommunity };

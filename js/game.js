@@ -2109,8 +2109,8 @@ function saveStats() {
   clearTimeout(statsTimer);
   statsTimer = setTimeout(() => { try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (_) {} if (window.SenaOnline) SenaOnline.queueSave(); }, 800);
 }
-function addStat(k, n = 1) { if (!persist || !n || game.custom) return; const before = achUnlocked(); stats[k] = (stats[k] | 0) + n; saveStats(); achCheck(before); }
-function maxStat(k, v) { if (!persist || game.custom || (stats[k] | 0) >= v) return; const before = achUnlocked(); stats[k] = v | 0; saveStats(); achCheck(before); }
+function addStat(k, n = 1) { if (!persist || !n || game.custom) return; const before = achUnlocked(); stats[k] = (stats[k] | 0) + n; saveStats(); achCheck(before); dailyCheck(); }
+function maxStat(k, v) { if (!persist || game.custom || (stats[k] | 0) >= v) return; const before = achUnlocked(); stats[k] = v | 0; saveStats(); achCheck(before); dailyCheck(); }
 
 const ACHIEVEMENTS = [
   { id: 'primer_nivel', name: 'Primer día', desc: 'Completa tu primer nivel', icon: 'flag', stat: 'levels', goal: 1 },
@@ -2120,6 +2120,7 @@ const ACHIEVEMENTS = [
   { id: 'programador', name: 'Programador', desc: 'Responde bien 10 preguntas de programación', icon: 'code', stat: 'quizRight', goal: 10 },
   { id: 'experto_adso', name: 'Experto ADSO', desc: 'Responde bien 50 preguntas de programación', icon: 'code', stat: 'quizRight', goal: 50 },
   { id: 'racha', name: 'En racha', desc: 'Acierta 5 preguntas seguidas', icon: 'bolt', stat: 'quizStreak', goal: 5 },
+  { id: 'constante', name: 'Constante', desc: 'Cumple las misiones del día 7 días seguidos', icon: 'flame', stat: 'streakBest', goal: 7 },
   { id: 'cazador', name: 'Cazador de bugs', desc: 'Elimina 100 bugs', icon: 'bug', stat: 'kills', goal: 100 },
   { id: 'exterminador', name: 'Exterminador', desc: 'Elimina 1.000 bugs', icon: 'bug', stat: 'kills', goal: 1000 },
   { id: 'ahorrador', name: 'Ahorrador', desc: 'Junta 500 monedas', icon: 'coin', stat: 'coinsEarned', goal: 500 },
@@ -2757,6 +2758,71 @@ document.getElementById('sTuto').addEventListener('click', () => {   // repetir 
 });
 window.SENA_TUTO = { start: () => tutoStart(true), state: () => ({ on: TUTO.on, i: TUTO.i }) };
 
+
+// ================= Misiones del día (con racha) =================
+// 3 misiones por día, iguales para todos (salen de la fecha de Colombia). Cada una paga monedas al cumplirse;
+// las 3 juntas dan un cofre que crece con la racha de días seguidos. El progreso se mide desde que empezó el día.
+const DAILY_KEY = 'senabros_daily';
+const DAILY_POOL = [
+  { id: 'bugs', text: 'Elimina 25 bugs', stat: 'kills', goal: 25, coins: 30 },
+  { id: 'monedas', text: 'Junta 60 monedas', stat: 'coinsEarned', goal: 60, coins: 30 },
+  { id: 'niveles', text: 'Completa 2 niveles', stat: 'levels', goal: 2, coins: 40 },
+  { id: 'preguntas', text: 'Responde bien 3 preguntas de programación', stat: 'quizRight', goal: 3, coins: 40 },
+  { id: 'intocable', text: 'Termina un nivel sin recibir daño', stat: 'flawless', goal: 1, coins: 50 },
+  { id: 'comunidad', text: 'Supera un nivel de la comunidad', stat: 'communityClears', goal: 1, coins: 40 },
+  { id: 'jefe', text: 'Derrota a un jefe', stat: 'bossKills', goal: 1, coins: 60 },
+  { id: 'carrera', text: 'Gana una carrera en línea', stat: 'raceWins', goal: 1, coins: 50, online: true },
+  { id: 'fiesta', text: 'Gana una fiesta de minijuegos', stat: 'partyWins', goal: 1, coins: 60, online: true },
+  { id: 'revivir', text: 'Revive a un compañero en línea', stat: 'revives', goal: 1, coins: 40, online: true },
+];
+const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+function dailyPick(date) {   // las 3 misiones del día (máximo una en línea)
+  let h = 0; for (const ch of date) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = seeded(h), pool = DAILY_POOL.slice().sort(() => rnd() - 0.5), out = [];
+  for (const m of pool) { if (out.length === 3) break; if (m.online && out.some(o => o.online)) continue; out.push(m); }
+  return out;
+}
+let daily = readJSON(DAILY_KEY, {});
+function dailyState() {
+  const d = today();
+  if (daily.date !== d) {   // empieza un día nuevo: se toma la foto de los contadores
+    const prev = daily;
+    daily = { date: d, base: Object.assign({}, stats), paid: [], chest: false, streak: prev.streak | 0, last: prev.last || '' };
+    if (persist) try { localStorage.setItem(DAILY_KEY, JSON.stringify(daily)); } catch (_) {}
+  }
+  return daily;
+}
+const dayBefore = d => { const t = new Date(d + 'T12:00:00'); t.setDate(t.getDate() - 1); return t.toISOString().slice(0, 10); };
+function dailyCheck() {
+  if (!persist) return;
+  const D = dailyState(), list = dailyPick(D.date);
+  let changed = false;
+  list.forEach(m => {
+    if (D.paid.includes(m.id)) return;
+    if ((stats[m.stat] | 0) - (D.base[m.stat] | 0) >= m.goal) {
+      D.paid.push(m.id); changed = true;
+      stats.coinsEarned = (stats.coinsEarned | 0) + m.coins;
+      setTimeout(() => { powerBanner({ icon: 'flag', name: 'Misión del día: +' + m.coins + ' monedas', color: 0x39d98a }); SFX.oneup(); }, 300);
+    }
+  });
+  if (!D.chest && list.every(m => D.paid.includes(m.id))) {
+    D.chest = true; changed = true;
+    D.streak = D.last === dayBefore(D.date) ? (D.streak | 0) + 1 : 1; D.last = D.date;
+    const bonus = 40 + 10 * Math.min(D.streak, 10);
+    stats.coinsEarned = (stats.coinsEarned | 0) + bonus;
+    stats.streakBest = Math.max(stats.streakBest | 0, D.streak);
+    setTimeout(() => { powerBanner({ icon: 'trophy', name: 'Cofre del día: +' + bonus + ' (racha ' + D.streak + ')', color: 0xffd23f }); SFX.fanfare ? SFX.fanfare() : SFX.oneup(); }, 2600);
+  }
+  if (changed) { try { localStorage.setItem(DAILY_KEY, JSON.stringify(D)); } catch (_) {} saveStats(); }
+}
+window.SENA_DAILY = () => {
+  const D = dailyState();
+  return { date: D.date, streak: D.chest || D.last === dayBefore(D.date) ? D.streak | 0 : 0, chest: D.chest, chestCoins: 40 + 10 * Math.min((D.chest ? D.streak : (D.last === dayBefore(D.date) ? D.streak + 1 : 1)) | 0, 10),
+    missions: dailyPick(D.date).map(m => ({ id: m.id, text: m.text, goal: m.goal, coins: m.coins, online: !!m.online, value: Math.min(m.goal, Math.max(0, (stats[m.stat] | 0) - (D.base[m.stat] | 0))), done: D.paid.includes(m.id) })) };
+};
+window.SENA_STAT_ADD = (k, n) => addStat(k, n);
+if (persist) dailyState();   // foto de los contadores al empezar el día
+
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
 window.SENA_LEVELS = () => WORLDS.flatMap((Wd, w) => Array.from({ length: Wd.count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name })));
@@ -3039,7 +3105,7 @@ window.SENA_RELOAD = () => {   // la nube trajo progreso nuevo: releerlo del alm
   Object.assign(game.progress, loadProgress()); game.world = game.progress.world;
   for (const k of Object.keys(powerData)) delete powerData[k];
   Object.assign(powerData, loadPowers()); setPowerUI();
-  stats = readJSON(STATS_KEY, {}); wardrobe = normWard(readJSON(WARD_KEY, {})); if (model) redress();
+  stats = readJSON(STATS_KEY, {}); wardrobe = normWard(readJSON(WARD_KEY, {})); if (model) redress(); daily = readJSON(DAILY_KEY, {});
 };
 window.SENA_BEST_SCORE = () => +(localStorage.getItem('senabros_best') || 0);
 window.SENA_SET_GUEST = on => {   // invitado: empieza de cero y no guarda; al salir se vuelve a leer lo guardado
