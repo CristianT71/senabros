@@ -50,6 +50,8 @@ const SFX = {
 // ================= Render =================
 const renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: /test=/.test(location.hash) });
 const MOBILE = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+// En pantallas de celular el personaje se dibuja más grande (la cámara no cambia, así el fondo no se ve acercado)
+const charView = big => (MOBILE && innerHeight < 560) ? (big ? 1.25 : 1.6) : 1;
 renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.25 : 2));
 renderer.outputEncoding = T.sRGBEncoding;
 renderer.toneMapping = T.ACESFilmicToneMapping;
@@ -1367,8 +1369,9 @@ function updateRemotes(dt) {
     const target = r.facing > 0 ? 0 : -Math.PI; r.rot += (target - r.rot) * Math.min(1, dt * 14);
     const hh = 0.5 * r.sc * 0.95, fs = r.facing > 0 ? 1 : -1;
     r.model.position.set(r.x + fs * hh * Math.sin(r.tilt), r.y + hh - hh * Math.cos(r.tilt), -0.35);
-    r.model.rotation.set(0, r.rot, r.tilt); r.model.scale.setScalar(r.sc);
-    r.tag.position.set(r.x, r.y + 1.55 * r.sc + 0.35, 0.4);
+    const cv = charView(r.sc > 1.2);
+    r.model.rotation.set(0, r.rot, r.tilt); r.model.scale.setScalar(r.sc * cv);
+    r.tag.position.set(r.x, r.y + 1.55 * r.sc * cv + 0.35, 0.4);
     if (r.ghost) { const bob = Math.sin(now / 260) * 0.12; r.model.position.y += 0.4 + bob; r.helpTag.position.set(r.x, r.y + 1.55 * r.sc + 0.95 + bob, 0.45); }
     r.mixer.update(dt);
   });
@@ -3826,9 +3829,6 @@ function updatePowerups(dt) {
 }
 
 let camX = 8, camY = 6;
-// En celulares (pantalla baja) la cámara se acerca para que el personaje se vea más grande
-let camZ = 1;
-function camZoom() { camZ += ((MOBILE && innerHeight < 560 ? 0.6 : 1) - camZ) * 0.2; return camZ; }
 function update(dt) {
   if (game.state === 'map') {
     updateMap(dt);
@@ -3861,6 +3861,7 @@ function update(dt) {
     // tamaño: parpadeo entre chico y grande al crecer/encogerse (como en Mario)
     let sc = player.big ? SIZE.big.scale : SIZE.small.scale;
     if (player.growT > 0) { player.growT -= dt; sc = Math.floor(player.growT * 12) % 2 ? SIZE.small.scale : SIZE.big.scale; }
+    sc *= charView(sc > 1.2);
     model.scale.setScalar(sc);
     if (player.dashT > 0) model.scale.set(sc * 1.25, sc * 0.85, sc);   // estirado del dash
     model.visible = player.dead || player.invT <= 0 || Math.floor(player.invT * 15) % 2 === 0;
@@ -3894,13 +3895,12 @@ function update(dt) {
     updateBackdrop(player.x - 1.5, player.y + 1.6);
     return;
   }
-  const zm = camZoom(), edge = zm < 1 ? 5.2 : 7, tx = Math.max(edge, Math.min(W - edge, player.x + player.facing * (zm < 1 ? 3.2 : 2.2)));
+  const tx = Math.max(7, Math.min(W - 7, player.x + player.facing * 2.2));
   camX += (tx - camX) * Math.min(1, dt * 3.5);
-  const zoom = zm;
-  const ty = Math.max(zoom < 1 ? 3.7 : 4.6, Math.min(levelSpec(game.level).cave ? 6.8 : 10, player.y + (zoom < 1 ? 1.7 : 2.1)));
+  const ty = Math.max(4.6, Math.min(levelSpec(game.level).cave ? 6.8 : 10, player.y + 2.1));
   camY += (ty - camY) * Math.min(1, dt * 3);
   shake *= Math.exp(-8 * dt);
-  camera.position.set(camX + (Math.random() - 0.5) * shake, camY + 0.8 * zoom + (Math.random() - 0.5) * shake, 10.5 * zoom);
+  camera.position.set(camX + (Math.random() - 0.5) * shake, camY + 0.8 + (Math.random() - 0.5) * shake, 10.5);
   camera.lookAt(camX, camY, 0);
   sun.position.set(camX + 6, 16, 12); sun.target.position.set(camX, 2, 0);
   updateBackdrop(camX, camY);
