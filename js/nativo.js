@@ -82,6 +82,12 @@ async function check(manual) {
     else if (manual) toast('Ya tienes la última versión (' + APP.version + ')');
   } catch (_) { if (manual) toast('No se pudo buscar actualizaciones'); }
 }
+// La cámara frontal: el juego ocupa toda la pantalla y la interfaz se aparta de esa zona (variables --sa-*)
+function applyInsets() {
+  if (!Apk || !Apk.insets) return;
+  Promise.resolve(Apk.insets()).then(i => { const s = document.documentElement.style; s.setProperty('--sa-l', Math.round(i.left) + 'px'); s.setProperty('--sa-r', Math.round(i.right) + 'px'); s.setProperty('--sa-t', Math.round(i.top) + 'px'); s.setProperty('--sa-b', Math.round(i.bottom) + 'px'); }).catch(() => {});
+}
+if (Apk) { addEventListener('resize', () => setTimeout(applyInsets, 250)); addEventListener('orientationchange', () => setTimeout(applyInsets, 500)); [300, 1500, 4000].forEach(t => setTimeout(applyInsets, t)); }
 let launched = false;
 if (kind === 'windows') desk.onUpdate(d => {
   if (d.state === 'available') { cur = { version: d.version }; (fromUser || (!launched && d.version !== dismissed)) ? (launched = true, show()) : chip(); }

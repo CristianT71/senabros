@@ -8,6 +8,9 @@ import android.os.Build;
 import android.provider.Settings;
 import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.core.content.FileProvider;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -64,6 +67,22 @@ public class ApkUpdaterPlugin extends Plugin {
         File dir = new File(getContext().getCacheDir(), "update");
         dir.mkdirs();
         return new File(dir, "SenaBros.apk");
+    }
+
+    // Zona de la cámara frontal en píxeles CSS: el juego se dibuja debajo, pero el marcador y los botones se apartan
+    @PluginMethod
+    public void insets(final PluginCall call) {
+        getActivity().runOnUiThread(() -> {
+            WindowInsetsCompat w = ViewCompat.getRootWindowInsets(getActivity().getWindow().getDecorView());
+            Insets c = w == null ? Insets.NONE : w.getInsets(WindowInsetsCompat.Type.displayCutout());
+            float d = getContext().getResources().getDisplayMetrics().density;
+            JSObject r = new JSObject();
+            r.put("left", c.left / d);
+            r.put("top", c.top / d);
+            r.put("right", c.right / d);
+            r.put("bottom", c.bottom / d);
+            call.resolve(r);
+        });
     }
 
     @PluginMethod

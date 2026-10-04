@@ -6,9 +6,10 @@ html, body { height: 100%; overflow: hidden; font-family: "Trebuchet MS", "Segoe
 #game canvas { display: block; width: 100%; height: 100%; }
 
 /* ================= HUD ================= */
+:root { --sa-l: 0px; --sa-r: 0px; --sa-t: 0px; --sa-b: 0px; }   /* zona de la cámara frontal (la rellena la app de Android) */
 #hud {
   position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-around;
-  padding: 12px 20px; pointer-events: none; text-shadow: 2px 2px 0 #000a; font-weight: 800; transition: opacity .4s;
+  padding: 12px calc(20px + var(--sa-r)) 12px calc(20px + var(--sa-l)); pointer-events: none; text-shadow: 2px 2px 0 #000a; font-weight: 800; transition: opacity .4s;
 }
 body.menu #hud { opacity: 0; }
 #hud div { display: flex; flex-direction: column; align-items: center; min-width: 90px; }
@@ -54,7 +55,7 @@ body.menu #hud { opacity: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .menu-col {
-  position: absolute; left: 5vw; top: 50%; transform: translateY(-52%);
+  position: absolute; left: max(5vw, calc(var(--sa-l) + 14px)); top: 50%; transform: translateY(-52%);
   display: flex; flex-direction: column; align-items: flex-start; gap: 16px; width: min(560px, 90vw);
 }
 .subtitle {
@@ -279,7 +280,7 @@ body.touch #touch > * { pointer-events: auto; }
 .tb-a { right: 0; bottom: 6px; width: 84px; height: 84px; background: radial-gradient(circle at 40% 35%, #8be04e, #2a7d00); }
 .tb-b { right: 96px; bottom: 0; width: 62px; height: 62px; font-size: 20px; background: radial-gradient(circle at 40% 35%, #ffe680, #c98a00); color: #08130a; }
 .tb-j { right: 70px; bottom: 82px; width: 60px; height: 60px; font-size: 26px; background: radial-gradient(circle at 40% 35%, #ff8a8a, #b0201a); }
-#tTop { position: absolute; top: 10px; right: max(12px, env(safe-area-inset-right)); display: flex; gap: 8px; }
+#tTop { position: absolute; top: 10px; right: max(12px, env(safe-area-inset-right), var(--sa-r)); display: flex; gap: 8px; }
 .ts { width: 40px; height: 40px; border-radius: 10px; border: 2px solid #fff; background: #0008; color: #fff; font-size: 16px; touch-action: none; }
 /* en el menú se usa la pantalla táctil normal (tarjetas y botón JUGAR) */
 body.touch.menu #tPad, body.touch.menu #tBtns, body.touch.menu .ts[data-key] { display: none; }
@@ -1176,4 +1177,4 @@ body.app-native #sInstall, body.app-native #installNote { display: none !importa
 .upd-btns button { padding: 13px; border-radius: 12px; border: 3px solid var(--ink); font: 900 16px "Trebuchet MS", sans-serif; cursor: pointer; box-shadow: 0 4px 0 var(--ink); }
 .upd-btns .go { background: linear-gradient(180deg, #ffe680, var(--gold) 55%, #e0a800); color: var(--ink); } .upd-btns .later { background: #ffffff1a; color: #fff; font-size: 13px; padding: 9px; box-shadow: none; border-color: #ffffff33; }
 .upd-btns button[hidden] { display: none; }
-#updChip { position: fixed; z-index: 300; top: 12px; left: 50%; transform: translateX(-50%); padding: 9px 16px; border-radius: 999px; border: 3px solid var(--ink); background: linear-gradient(180deg, #ffe680, var(--gold)); color: var(--ink); font: 900 13px "Trebuchet MS", sans-serif; cursor: pointer; box-shadow: 0 4px 0 var(--ink); }
+#updChip { position: fixed; z-index: 300; top: 64px; left: 50%; transform: translateX(-50%); padding: 6px 14px; opacity: .94; border-radius: 999px; border: 3px solid var(--ink); background: linear-gradient(180deg, #ffe680, var(--gold)); color: var(--ink); font: 900 13px "Trebuchet MS", sans-serif; cursor: pointer; box-shadow: 0 4px 0 var(--ink); }
