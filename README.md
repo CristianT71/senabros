@@ -99,6 +99,11 @@ npx @gltf-transform/cli meshopt tmp.glb assets/modelos/personajes/Nombre.glb --l
 Como los assets quedan guardados un año en el navegador, si reemplazas un archivo sube `ASSET_V` en `js/assets.js`.
 La calidad de gráficos (automática, alta, media, baja) se cambia en Ajustes; en automática baja sola si el juego va lento.
 
+## Música
+
+Se genera con código (Web Audio): cada mundo, el mapa, el menú, el jefe, la carrera y la fiesta tienen su canción
+(progresión de acordes, melodía con semilla, bajo, arpegio y batería). El volumen está en Ajustes y la tecla M silencia todo.
+
 ## Probar un nivel directo
 
 Agrega al final de la dirección:
@@ -134,11 +139,12 @@ Agrega al final de la dirección:
   quien la toca primero se la queda. Pisar a otro le roba monedas y tocar un bug quita 3. Marcador en vivo y podio.
 - **Supervivencia:** en equipo contra oleadas de bugs cada vez más rápidas y numerosas; cada 5 oleadas sale el Bug Rey.
   Los caídos reviven al empezar la siguiente oleada. Si cae todo el equipo termina y se muestra la oleada alcanzada.
-- **Fiesta de minijuegos:** 4 rondas al azar entre 5 minijuegos: *El piso se cae* (último en pie), *Rey de la colina*
-  (tiempo en la zona dorada), *Atrapa la corona* (pisas al que la tiene para quitársela), *Lluvia de rayos* (último en pie)
-  y *Duelo de preguntas* (3 preguntas ADSO, gana quien acierte más rápido). Cada ronda da 3-2-1-0 puntos, al final hay
-  podio y en la sala el anfitrión tiene el botón **Revancha**. Cada jugador simula su ronda y envía su resultado (`pres`);
-  todos calculan la misma tabla. `#pfast` en la dirección acorta los minijuegos a 8 s (solo para pruebas).
+- **Fiesta de minijuegos:** 5 rondas (3 minijuegos nuevos + 2 clásicos) entre 10: *Papa caliente* (pasas la bomba tocando a
+  otro), *Lluvia de monedas*, *Empujones* (los golpes mandan a volar), *Cazabugs*, *Luz roja, luz verde*, *El piso se cae*,
+  *Rey de la colina*, *Atrapa la corona*, *Lluvia de rayos* y *Duelo de preguntas*. Cada ronda da 3-2-1-0 puntos, al final
+  hay podio y el anfitrión tiene **Revancha**. En la fiesta los golpes (J) empujan a los demás. Cada jugador simula su ronda
+  y envía su resultado (`pres`); todos calculan la misma tabla. `#pfast` acorta los minijuegos a 8 s (solo para pruebas).
+- **Gestos:** teclas 1 a 4 (saludar, bailar, burla, festejar) en cualquier nivel; en línea también desde el panel de chat.
 - **Red:** cada jugador solo envía su posición cuando cambia (y una señal de vida por segundo) para no pasar el límite de
   mensajes de Realtime; los jugadores salen escalonados para no quedar pegados.
 - **Chat:** tecla T (o el botón Chat) durante el nivel; también en la sala. Mensajes rápidos, texto libre (máx. 60, con filtro

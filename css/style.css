@@ -1042,3 +1042,16 @@ body.quiz-open #touch { display: none !important; }
 #mpRoom .modes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 @media (max-width: 900px) { #mpRoom .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } #mpModeParty { grid-column: 1 / -1; } }
 @media (max-height: 520px) { #mpRoom .modes { grid-template-columns: repeat(5, minmax(0, 1fr)); } #mpModeParty { grid-column: auto; } .pb-card { padding: 8px 12px; gap: 4px; } #pbName { font-size: 22px; } #pbRule { font-size: 12px; } #pbCount { font-size: 40px; } .pb-row { padding: 3px 8px; } .pb-row img { width: 26px; height: 26px; } }
+
+/* semáforo de "Luz roja, luz verde" */
+#pLight { position: fixed; top: 110px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; gap: 8px; padding: 8px 12px; border-radius: 18px; background: #111c; border: 3px solid #000; box-shadow: 0 4px 0 var(--ink); pointer-events: none; }
+#pLight[hidden] { display: none; }
+#pLight i { width: 34px; height: 34px; border-radius: 50%; background: #333; transition: background .15s, box-shadow .15s; }
+#pLight.pl-r .r { background: #ff2a2a; box-shadow: 0 0 22px #ff2a2a; } #pLight.pl-y .y { background: #ffd23f; box-shadow: 0 0 22px #ffd23f; } #pLight.pl-g .g { background: #39d98a; box-shadow: 0 0 22px #39d98a; }
+@media (max-height: 520px) { #pLight { top: 96px; padding: 5px 8px; } #pLight i { width: 24px; height: 24px; } }
+
+/* gestos en el panel de chat */
+.cp-emotes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.cp-emotes button { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 4px; border-radius: 10px; border: 2px solid #ff7ad9; background: #ff7ad91f; color: #fff; font: 900 13px "Trebuchet MS", sans-serif; cursor: pointer; }
+.cp-emotes button b { width: 20px; height: 20px; border-radius: 6px; background: #ff7ad9; color: #2a1060; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+@media (max-height: 520px) { .cp-emotes { margin-bottom: 5px; gap: 4px; } .cp-emotes button { padding: 4px 2px; font-size: 11px; } }

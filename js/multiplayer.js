@@ -304,6 +304,7 @@ function buildChatButtons() {
   $('cpFaces').replaceChildren(...SENA_FACES.map(faces));
   $('lcFaces').replaceChildren(...SENA_FACES.map(id => el('button', { type: 'button', title: FACE_NAME[id], onclick: () => sendChat('f', id) }, faceImg(id))));
   $('cpQuick').replaceChildren(...QUICK.map(q => el('button', { type: 'button', onclick: () => { sendChat('t', q); $('chatPanel').hidden = true; } }, q)));
+  $('cpEmotes').replaceChildren(...Object.entries(window.SENA_EMOTES || {}).map(([id, e], i) => el('button', { type: 'button', onclick: () => { SENA_EMOTE(id); $('chatPanel').hidden = true; } }, el('b', {}, String(i + 1)), e.name)));
 }
 function openChat() {
   if (!st.inLevel) return;

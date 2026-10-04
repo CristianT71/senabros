@@ -211,6 +211,7 @@
     </div>
   </section>
   <!-- Fiesta de minijuegos: presentación de cada ronda, resultados y podio -->
+  <div id="pLight" hidden><i class="r"></i><i class="y"></i><i class="g"></i></div>
   <div id="partyBox" hidden><div class="pb-card"><small id="pbRound"></small><b id="pbName"></b><p id="pbRule"></p><div id="pbBody"></div><span id="pbCount"></span></div></div>
   <!-- Pregunta de programación (bloque </>) -->
   <div id="quiz" role="dialog" aria-modal="true" aria-labelledby="qzQ">
@@ -229,6 +230,7 @@
   <div id="chatLog"></div>
   <div id="chatPanel" hidden>
     <div class="cp-faces" id="cpFaces"></div>
+    <div class="cp-emotes" id="cpEmotes"></div>
     <div class="cp-quick" id="cpQuick"></div>
     <form id="cpForm" class="cp-row" autocomplete="off"><input id="cpInput" type="text" maxlength="60" placeholder="Escribe un mensaje..." spellcheck="false"><button type="submit" class="mini ok big">Enviar</button></form>
   </div>
@@ -407,6 +409,9 @@
       <div class="ts-sec">GRÁFICOS</div>
       <div class="gfx" id="gfxBtns"><button type="button" data-q="auto">Automática</button><button type="button" data-q="alta">Alta</button><button type="button" data-q="media">Media</button><button type="button" data-q="baja">Baja</button></div>
       <small id="gfxNote" class="ts-note"></small>
+      <div class="ts-sec">SONIDO</div>
+      <label>Música <b id="vMusic">45%</b><input type="range" id="sMusic" min="0" max="100" step="5"></label>
+      <small class="ts-note">La tecla M silencia todo el sonido.</small>
       <div class="touch-only ts-sec">CONTROLES</div>
       <label class="touch-only">Tamaño de la cruceta <b id="vPad">100%</b><input type="range" id="sPad" min="60" max="160" step="5"></label>
       <label class="touch-only">Tamaño de los botones <b id="vBtn">100%</b><input type="range" id="sBtn" min="60" max="160" step="5"></label>

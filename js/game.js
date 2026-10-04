@@ -70,6 +70,23 @@ Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 12, bottom: -6, ne
 sun.shadow.bias = -0.0006;
 scene.add(sun, sun.target);
 
+// ================= Música de fondo (chiptune generada con código) =================
+// Cada canción es una progresión de acordes + una melodía armada con una semilla (siempre suena igual).
+// Voces: melodía, bajo, arpegio suave y batería (bombo, caja y platillo con ruido). Volumen en Ajustes; M silencia todo.
+const MUS = { gain: null, cur: '', song: null, step: 0, next: 0, timer: 0, noise: null, vol: 0.45 };
+try { const v = localStorage.getItem('senabros_music'); if (v !== null) MUS.vol = Math.max(0, Math.min(1, +v)); } catch (_) {}
+const SCALES = { maj: [0, 2, 4, 5, 7, 9, 11], min: [0, 2, 3, 5, 7, 8, 10], dor: [0, 2, 3, 5, 7, 9, 10] };
+const SONGS = {
+  menu:  { bpm: 112, root: 60, sc: 'maj', prog: [0, 5, 3, 4], seed: 11, lead: 'square', drums: ['k...h...s...h...', 'k...h.k.s...h.h.'] },
+  map:   { bpm: 98, root: 62, sc: 'maj', prog: [0, 3, 4, 0], seed: 5, lead: 'triangle', drums: ['k.......s.......', 'k.......s...k...'] },
+  w1:    { bpm: 132, root: 64, sc: 'maj', prog: [0, 3, 4, 3], seed: 21, lead: 'square', drums: ['k...h.h.s...h.h.', 'k.k.h.h.s...h.hh'] },
+  w2:    { bpm: 124, root: 57, sc: 'min', prog: [0, 5, 6, 4], seed: 33, lead: 'sawtooth', drums: ['k..kh...s..kh...', 'k..kh.k.s..kh.hh'] },
+  w3:    { bpm: 118, root: 65, sc: 'maj', prog: [0, 4, 5, 3], seed: 44, lead: 'triangle', drums: ['k...h...s...h..h', 'k...h.k.s...h.hh'] },
+  boss:  { bpm: 156, root: 52, sc: 'min', prog: [0, 0, 5, 6], seed: 66, lead: 'sawtooth', drums: ['k.k.s.k.k.k.s.kk', 'k.k.s.k.kkk.s.ss'] },
+  party: { bpm: 142, root: 67, sc: 'maj', prog: [0, 4, 5, 3], seed: 77, lead: 'square', drums: ['k...s.k.k...s...', 'k.h.s.h.k.k.s.hh'] },
+  race:  { bpm: 152, root: 62, sc: 'dor', prog: [0, 3, 0, 4], seed: 88, lead: 'square', drums: ['k.h.s.h.k.h.s.h.', 'k.h.s.hkk.h.s.hh'] },
+};
+// arma 8 compases de melodía: A A' B A'' (motivos de 2 compases)
 // ================= Calidad de gráficos =================
 // Automática: en PC alta; en celular media, o baja si el celular tiene poca memoria o pocos núcleos.
 // Si en automática el juego va lento (menos de 28 fps), baja un nivel sola.
@@ -96,7 +113,9 @@ function setQuality(pref) {
   applyQuality(pref === 'auto' ? autoQuality() : pref);
 }
 const Q_LABEL = { alta: 'Alta', media: 'Media', baja: 'Baja' };
+function syncMusicUI() { const r = document.getElementById('sMusic'); if (r) { r.value = Math.round(MUS.vol * 100); document.getElementById('vMusic').textContent = Math.round(MUS.vol * 100) + '%'; } }
 function syncGfxUI() {
+  syncMusicUI();
   document.querySelectorAll('#gfxBtns button').forEach(b => b.classList.toggle('on', b.dataset.q === qPref));
   const note = document.getElementById('gfxNote');
   if (note) note.textContent = qPref === 'auto' ? 'Ahora: ' + Q_LABEL[qLevel] + '. Se ajusta sola si el juego va lento.'
@@ -112,6 +131,7 @@ function watchFps(raw) {   // en automática, si va lento por 6 s seguidos, baja
 }
 applyQuality(qPref === 'auto' ? autoQuality() : qPref);
 document.querySelectorAll('#gfxBtns button').forEach(b => b.addEventListener('click', () => setQuality(b.dataset.q)));
+document.getElementById('sMusic').addEventListener('input', e => { window.SENA_MUSIC.setVolume(e.target.value / 100); syncMusicUI(); });
 // en PC la ventana de ajustes se abre desde el menú (en celular la maneja touch.js)
 const tSettings = document.getElementById('tSettings');
 function openGfx() { tSettings.classList.add('show'); window.SENA_PAUSED = true; syncGfxUI(); }
@@ -1124,10 +1144,10 @@ function toast(t, ms = 1500) { toastEl.textContent = t; toastEl.classList.add('s
 
 let netMute = false;   // true mientras se aplica un evento de otro jugador (no da puntos ni misiones)
 const MODE_EVENTS = {   // qué se comparte en cada modo (en equipo se comparte todo)
-  race: new Set(['finish', 'stomp', 'loot']),
-  battle: new Set(['cspawn', 'cgrab', 'stomp', 'loot']),
-  survival: new Set(['kill', 'boss', 'wave', 'revive']),
-  party: new Set(['pround', 'pres', 'pcrown', 'stomp']),
+  race: new Set(['finish', 'stomp', 'loot', 'emote']),
+  battle: new Set(['cspawn', 'cgrab', 'stomp', 'loot', 'emote']),
+  survival: new Set(['kill', 'boss', 'wave', 'revive', 'emote']),
+  party: new Set(['pround', 'pres', 'pcrown', 'stomp', 'pbomb', 'pboom', 'pgrab', 'ppush', 'kill', 'emote']),
 };
 function net(type, payload) {
   if (!game.mp || netMute || !window.SENA_NET) return;
@@ -1275,12 +1295,22 @@ function applyRemoteEvent(uid, name, type, p) {
     } else if (type === 'finish') {
       if (game.mp.mode === 'race') raceFinished(uid, name, p.t);
       else if (game.state === 'play' && !player.dead) { toast(name + ' llegó a la meta', 2200); netMute = false; if (player.ghost) reviveSelf(null, true); startWin(true); }
+    } else if (type === 'emote') {
+      if (EMOTES[p.k]) showBubble(uid, 'f', EMOTES[p.k].face);
     } else if (type === 'pround') {
       netMute = false; partyRound(p.r | 0, p.list, p.seed | 0);
     } else if (type === 'pres') {
       const P = pState(); if (P && (p.r | 0) >= P.r) (P.res[p.r | 0] = P.res[p.r | 0] || {})[uid] = +p.v || 0;
     } else if (type === 'pcrown') {
       const P = pState(); if (P && (p.r | 0) === P.r) partyCrown(p.u, false);
+    } else if (type === 'pbomb') {
+      const P = pState(); if (P && (p.r | 0) === P.r && P.bomb) { P.bomb.holder = p.u; P.bomb.fuse = +p.f || P.bomb.fuse; P.bomb.passCd = 1; if (p.u === game.mp.me) { toast('¡' + name + ' te pasó la bomba!', 1300); SFX.bump(); } }
+    } else if (type === 'pboom') {
+      const P = pState(); if (P && (p.r | 0) === P.r) papaBoom(p.u, p.next || null);
+    } else if (type === 'pgrab') {
+      const P = pState(); if (P && (p.r | 0) === P.r && P.drops) { const d = P.drops[p.i | 0]; if (d && !d.done) dropDone(d, P.live.get(d.i)); }
+    } else if (type === 'ppush') {
+      if (p.u === game.mp.me && !player.spect) { player.kbV = (p.d > 0 ? 1 : -1) * ((pState() || {}).g === 'sumo' ? 19 : 13); player.kbT = 0.35; player.vy = 8; player.grounded = false; player.stunT = 0.35; SFX.punch(); shake = 0.25; }
     } else if (type === 'cspawn') {
       battleSpawnCoin(p.i, p.x, p.y, p.v);
     } else if (type === 'cgrab') {
@@ -1325,7 +1355,7 @@ function stopMP() {
   [...remotes.keys()].forEach(removeRemote);
   if (player.ghost) endGhost();
   chatBubbles.splice(0).forEach(b => scene.remove(b.obj));
-  document.body.classList.remove('mplevel', 'race'); game.arena = null; player.spect = false; partyBox.hidden = true; if (quiz.open) { quiz.answered = true; closeQuiz(); } if (game.level < 0) { game.level = 0; buildLevel(); } ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
+  document.body.classList.remove('mplevel', 'race'); game.arena = null; player.spect = false; partyBox.hidden = true; document.getElementById('pLight').hidden = true; if (quiz.open) { quiz.answered = true; closeQuiz(); } if (game.level < 0) { game.level = 0; buildLevel(); } ghostMsg.hidden = true; raceHud.hidden = true; raceTimer.hidden = true;
   game.mp = null;
 }
 window.SENA_MP = {
@@ -1430,7 +1460,7 @@ function bubbleSprite(kind, val) {
   return sp;
 }
 function showBubble(uid, kind, val) {
-  const isMe = game.mp && uid === game.mp.me;
+  const isMe = uid === localUid();
   if (!isMe && !remotes.has(uid)) return;
   chatBubbles.filter(b => b.uid === uid).forEach(b => { b.life = Math.min(b.life, 0.25); });
   const obj = bubbleSprite(kind, val); scene.add(obj);
@@ -1441,7 +1471,7 @@ function updateBubbles(dt) {
   for (let i = chatBubbles.length - 1; i >= 0; i--) {
     const b = chatBubbles[i]; b.life -= dt; b.t += dt;
     let x, y, h;
-    if (game.mp && b.uid === game.mp.me) { x = player.x; y = player.y; h = player.h; }
+    if (b.uid === localUid()) { x = player.x; y = player.y; h = player.h; }
     else { const r = remotes.get(b.uid); if (!r || !r.model || !r.model.visible) { b.obj.visible = false; if (b.life <= 0) { scene.remove(b.obj); chatBubbles.splice(i, 1); } continue; } x = r.x; y = r.y + (r.ghost ? 0.4 : 0); h = 1.5 * r.sc; }
     b.obj.visible = true;
     const pop = Math.min(1, b.t / 0.18), bob = b.face ? Math.sin(b.t * 7) * 0.08 : 0;
@@ -1593,13 +1623,21 @@ function updateMpFx(dt) {
 // 4 rondas de 5 minijuegos posibles. Cada jugador simula su ronda y al final envía su resultado ('pres');
 // todos calculan la misma tabla de puntos (3-2-1-0). El que reparte (isSpawner) arranca cada ronda con 'pround'.
 const PARTY_GAMES = {
-  piso:   { name: 'El piso se cae', rule: 'Los bloques avisan en rojo y se caen. ¡Sé el último en pie! Puedes empujar y pisar.', time: 50, surv: true, unit: 's' },
-  colina: { name: 'Rey de la colina', rule: 'Quédate dentro de la zona dorada (cambia de lugar). Empuja y pisa a los demás.', time: 45, unit: 's' },
-  corona: { name: 'Atrapa la corona', rule: 'Agarra la corona y no la sueltes. Pisa a quien la tenga para quitársela.', time: 45, unit: 's' },
-  rayos:  { name: 'Lluvia de rayos', rule: 'Los rayos marcan un círculo amarillo antes de caer. ¡Esquívalos!', time: 50, surv: true, unit: 's' },
-  duelo:  { name: 'Duelo de preguntas', rule: '3 preguntas de programación. Gana quien acierte más y más rápido.', time: 60, unit: 'pts' },
+  // nuevos (más caóticos)
+  papa:    { name: 'Papa caliente', rule: 'Pasa la bomba tocando a otro antes de que explote. Con la bomba corres más rápido.', time: 60, surv: true, unit: 's', fresh: true },
+  monedas: { name: 'Lluvia de monedas', rule: 'Agarra todas las monedas que caen (las doradas valen 5). Las rocas te aturden.', time: 35, unit: 'mon', fresh: true },
+  sumo:    { name: 'Empujones', rule: 'Golpea (J) para mandar a volar a los demás. La plataforma se encoge. ¡Último en pie!', time: 45, surv: true, unit: 's', fresh: true },
+  caza:    { name: 'Cazabugs', rule: 'Llueven bugs: písalos o golpéalos antes que los demás. Si te tocan, pierdes uno.', time: 35, unit: 'bugs', fresh: true },
+  luz:     { name: 'Luz roja, luz verde', rule: 'Corre a la meta solo con luz verde. Si te mueves en rojo, vuelves 10 pasos atrás.', time: 45, unit: '%', fresh: true },
+  // clásicos
+  piso:    { name: 'El piso se cae', rule: 'Los bloques avisan en rojo y se caen. ¡Sé el último en pie! Puedes empujar y golpear.', time: 40, surv: true, unit: 's' },
+  colina:  { name: 'Rey de la colina', rule: 'Quédate dentro de la zona dorada (cambia de lugar). Empuja y golpea a los demás.', time: 35, unit: 's' },
+  corona:  { name: 'Atrapa la corona', rule: 'Agarra la corona y no la sueltes. Pisa a quien la tenga para quitársela.', time: 35, unit: 's' },
+  rayos:   { name: 'Lluvia de rayos', rule: 'Los rayos marcan un círculo amarillo antes de caer. ¡Esquívalos!', time: 40, surv: true, unit: 's' },
+  duelo:   { name: 'Duelo de preguntas', rule: '3 preguntas de programación. Gana quien acierte más y más rápido.', time: 60, unit: 'pts' },
 };
-const PARTY_ROUNDS = 4, PARTY_PTS = [3, 2, 1, 0];
+const PARTY_ROUNDS = 5, PARTY_PTS = [3, 2, 1, 0];
+const partyFmt = (unit, v) => unit === 's' ? v.toFixed(1) + ' s' : unit === 'mon' ? Math.round(v) + ' monedas' : unit === 'bugs' ? Math.round(v) + ' bugs' : unit === '%' ? (v >= 100 ? 'Meta' : Math.round(v) + '%') : Math.round(v) + ' pts';
 const partyFast = () => /pfast/.test(location.hash);   // solo para pruebas automáticas: minijuegos de 8 s
 const partyBox = document.getElementById('partyBox');
 function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -1611,10 +1649,23 @@ function partyArena(g) {
   if (g === 'piso') { gaps.push([0, W - 1]); plat(6, 29, 4); plat(11, 24, 8); theme = 'sky'; bg = 'sky'; style = 'cloud'; }
   else if (g === 'colina' || g === 'corona') { walls(); plat(6, 11, 5); plat(24, 29, 5); plat(14, 21, 8); springs.push(3.5, 32.5); if (g === 'corona') { theme = 'datahwy'; bg = 'datahwy'; style = 'tech'; } }
   else if (g === 'rayos') { walls(); plat(8, 12, 5); plat(23, 27, 5); theme = 'storm'; bg = 'storm'; style = 'cloud'; }
+  else if (g === 'papa') { walls(); plat(7, 11, 5); plat(24, 28, 5); plat(15, 20, 8); theme = 'lava'; bg = 'volcano'; style = 'volcano'; }
+  else if (g === 'monedas') { walls(); plat(6, 11, 5); plat(24, 29, 5); plat(14, 21, 8); theme = 'jungle'; bg = 'selva'; }
+  else if (g === 'sumo') { gaps.push([0, W - 1]); plat(9, 26, 4); theme = 'sea'; bg = 'ocean'; style = 'ship'; }
+  else if (g === 'caza') { walls(); plat(6, 11, 5); plat(24, 29, 5); plat(14, 21, 8); springs.push(3.5, 32.5); theme = 'icesky'; bg = 'icesky'; style = 'ice'; }
+  else if (g === 'luz') { return partyLuzArena(); }
   else { walls(); theme = 'day'; bg = 'yamboro'; }
   return { name: PARTY_GAMES[g] ? PARTY_GAMES[g].name : 'Fiesta', theme, bg, style, gaps, blocks, solid, pipes: [], coins: [], plats: [], fires: [], cannons: [], springs,
     enemies: [], belts: [], bolts: [], flagX: W + 60, W, time: 999, checkpoint: 999, deathY: -3, party: g };
 }
+function partyLuzArena() {   // pista larga con obstáculos y meta al final
+  const W = 66, solid = [];
+  for (let y = 2; y < 14; y++) solid.push([0, y], [1, y], [W - 2, y], [W - 1, y]);
+  [[12, 1], [20, 2], [28, 1], [36, 3], [44, 1], [50, 2]].forEach(([x, h]) => { for (let k = 0; k < h; k++) solid.push([x, 2 + k], [x + 1, 2 + k]); });
+  return { name: PARTY_GAMES.luz.name, theme: 'morning', bg: 'yamboro', style: 'grass', gaps: [], blocks: [], solid, pipes: [], coins: [], plats: [], fires: [], cannons: [], springs: [],
+    enemies: [], belts: [], bolts: [], flagX: W + 60, W, time: 999, checkpoint: 999, deathY: -3, party: 'luz' };
+}
+const LUZ_START = 4, LUZ_GOAL = 60;
 function partyInit() {
   game.mp.party = { r: -1, list: null, seed: 0, phase: 'wait', t: 2.5, val: 0, out: false, res: {}, pts: {}, wins: {}, crown: null, crownCd: 0, waitT: 0 };
 }
@@ -1630,8 +1681,9 @@ function partyRound(r, list, seed) {
   game.arena = partyArena(g); startLevel(-1);
   player.spect = false; if (model) model.visible = true;
   const idx = Math.max(0, game.mp.ids.indexOf(game.mp.me)), n = Math.max(2, game.mp.ids.length);
-  const sx = g === 'piso' ? 8 + idx * (20 / (n - 1)) : 5 + idx * ((game.arena.W - 10) / (n - 1));
-  player.x = player.safeX = sx; player.y = g === 'piso' ? 5 : 2; game.checkpoint = sx;
+  const sx = g === 'piso' ? 8 + idx * (20 / (n - 1)) : g === 'sumo' ? 11 + idx * (14 / (n - 1)) : g === 'luz' ? LUZ_START + idx * 0.9 : 5 + idx * ((game.arena.W - 10) / (n - 1));
+  player.x = player.safeX = sx; player.y = g === 'piso' || g === 'sumo' ? 5 : 2; game.checkpoint = sx;
+  document.getElementById('pLight').hidden = g !== 'luz';
   if (g === 'piso') {   // orden en que se caen los bloques (igual para todos)
     const t = game.arena.solid.map(([x, y]) => ({ x, y })).sort(() => rnd() - 0.5);
     let at = 3; P.tiles = t.slice(0, t.length - 4).map((b, k) => { at += Math.max(0.45, 1.45 - k * 0.035); return Object.assign(b, { at, warn: false, gone: false }); });
@@ -1644,6 +1696,25 @@ function partyRound(r, list, seed) {
     const ring = new T.Mesh(new T.BoxGeometry(4, 0.12, 1.7), new T.MeshBasicMaterial({ color: 0xffd23f })); P.zoneMesh.add(ring); ring.position.y = -1.25;
   }
   if (g === 'corona') { P.crownMesh = makePartyCrown(); levelGroup.add(P.crownMesh); }
+  if (g === 'papa') { P.bombMesh = makePartyBomb(); levelGroup.add(P.bombMesh); P.bomb = null; }
+  if (g === 'sumo') {   // la plataforma se encoge desde los bordes
+    const cols = []; for (let a = 9, b = 26; a < b - 3; a++, b--) cols.push(a, b);
+    let at = 6; P.tiles = cols.map((x, k) => { if (k % 2 === 0) at += 3.2; return { x, y: 4, at, warn: false, gone: false }; });
+  }
+  if (g === 'monedas') {
+    let at = 0.6; P.drops = [];
+    for (let k = 0; k < 140; k++) { at += 0.22 + rnd() * 0.18; const q = rnd(); P.drops.push({ i: k, at, x: 2.6 + rnd() * (game.arena.W - 5.2), kind: q < 0.14 ? 'r' : q < 0.27 ? 'g' : 'c' }); }
+    P.live = new Map();
+  }
+  if (g === 'caza') {
+    let at = 0.5; P.spawns = [];
+    for (let k = 0; k < 70; k++) { at += 0.45 + rnd() * 0.35; P.spawns.push({ at, x: 3 + rnd() * (game.arena.W - 6), type: rnd() < 0.25 ? 'archivo-corrupto' : 'robot-404', uid: 'z' + k, done: false }); }
+  }
+  if (g === 'luz') {   // semáforo: igual para todos
+    let at = 1.5; P.lights = [{ at: 0, c: 'g' }];
+    for (let k = 0; k < 40; k++) { at += 1.4 + rnd() * 2.6; P.lights.push({ at, c: 'y' }); at += 0.7; P.lights.push({ at, c: 'r' }); at += 1.3 + rnd() * 1.6; P.lights.push({ at, c: 'g' }); }
+    P.goalMesh = makeGoalLine(); levelGroup.add(P.goalMesh); P.finished = false;
+  }
   if (g === 'rayos') { let at = 2; P.strikes = []; for (let k = 0; k < 90; k++) { at += Math.max(0.3, 1.25 - k * 0.025); P.strikes.push({ at, x: 2.5 + rnd() * (game.arena.W - 5), done: false }); } }
   if (g === 'duelo') {
     const pool = (window.SENA_PREGUNTAS || []).filter(q => q.d <= 2).slice();
@@ -1675,7 +1746,7 @@ function showPartyBox(kind) {
       const d = document.createElement('div'); d.className = 'pb-row' + (x.uid === game.mp.me ? ' me' : '') + (kind === 'final' && i < 3 ? ' p' + (i + 1) : '');
       const img = document.createElement('img'); img.src = partyFace(x.uid); img.alt = '';
       const n = document.createElement('b'); n.textContent = (i + 1) + '. ' + partyNames(x.uid);
-      const v = document.createElement('span'); v.textContent = kind === 'final' ? (P.wins[x.uid] | 0) + ' rondas ganadas' : (unit === 's' ? x.v.toFixed(1) + ' s' : Math.round(x.v) + ' pts');
+      const v = document.createElement('span'); v.textContent = kind === 'final' ? (P.wins[x.uid] | 0) + ' rondas ganadas' : partyFmt(unit, x.v);
       const p2 = document.createElement('i'); p2.textContent = kind === 'final' ? x.total + ' pts' : '+' + x.pts + '  (' + x.total + ')';
       d.append(img, n, v, p2); return d;
     }));
@@ -1718,8 +1789,9 @@ function updateParty(dt) {
   if (P.phase === 'wait') {   // esperando la primera ronda
     raceTimer.hidden = false; raceTimer.textContent = 'La fiesta empieza en un momento...';
     if (P.t <= 0 && isSpawner()) {
-      const all = Object.keys(PARTY_GAMES), rnd = seeded(Date.now() & 0xffffff);
-      const list = all.sort(() => rnd() - 0.5).slice(0, PARTY_ROUNDS), seed = Math.floor(rnd() * 1e9);
+      const rnd = seeded(Date.now() & 0xffffff), mix = a => a.sort(() => rnd() - 0.5);
+      const keys = Object.keys(PARTY_GAMES), fresh = mix(keys.filter(k => PARTY_GAMES[k].fresh)), old = mix(keys.filter(k => !PARTY_GAMES[k].fresh));
+      const list = mix([...fresh.slice(0, 3), ...old.slice(0, PARTY_ROUNDS - 3)]), seed = Math.floor(rnd() * 1e9);
       net('pround', { r: 0, list, seed }); partyRound(0, list, seed);
     } else if (P.t < -12) partyFinal();
     return;
@@ -1746,6 +1818,22 @@ function updateParty(dt) {
       if (played >= b.at) { b.gone = true; grid[b.x][b.y] = null; if (m) { levelGroup.remove(m); delete blockMesh[b.x + ',' + b.y]; } spawnFrag(b.x + 0.5, b.y + 0.5, MAT.stone, 3, 3); }
     });
     if (P.g === 'rayos') P.strikes.forEach(st => { if (!st.done && played >= st.at) { st.done = true; strikeAt(st.x, 0); } });
+    if (P.g === 'sumo') P.tiles.forEach(b => {
+      if (b.gone) return;
+      const m = blockMesh[b.x + ',' + b.y];
+      if (!b.warn && played >= b.at - 1.2) { b.warn = true; if (m) m.material = PARTY_WARN; }
+      if (b.warn && m) m.position.y = b.y + 0.5 + Math.sin(performance.now() / 25) * 0.04;
+      if (played >= b.at) { b.gone = true; grid[b.x][b.y] = null; if (m) { levelGroup.remove(m); delete blockMesh[b.x + ',' + b.y]; } spawnFrag(b.x + 0.5, b.y + 0.5, MAT.stone, 3, 3); }
+    });
+    if (P.g === 'papa') updatePapa(dt, played);
+    if (P.g === 'monedas') updateCoinRain(dt, played);
+    if (P.g === 'caza') P.spawns.forEach(z => {
+      if (z.done || played < z.at) return;
+      z.done = true; addEnemy(z.x, z.type === 'archivo-corrupto' ? 9 : 11, z.type);
+      const e = enemies[enemies.length - 1]; e.uid = z.uid; e.active = true; e.dir = z.x < game.arena.W / 2 ? 1 : -1;
+      burstColor(z.x, 11, 0xff4a4a, 8, 3);
+    });
+    if (P.g === 'luz') updateLuz(dt, played);
     if (P.g === 'colina') {
       const z = P.zones[Math.min(P.zones.length - 1, Math.floor(played / 9))];
       P.zoneMesh.position.set(z[0] + 2, z[1] + 1.3, 0); P.zoneMesh.material.opacity = 0.34 + Math.sin(performance.now() / 200) * 0.1;
@@ -1777,6 +1865,103 @@ function updateParty(dt) {
     if (P.t < -12) partyFinal();   // si quien reparte se fue
   }
 }
+
+// ---------- Papa caliente ----------
+function makePartyBomb() {
+  const g = new T.Group();
+  const ball = new T.Mesh(new T.SphereGeometry(0.34, 18, 14), new T.MeshStandardMaterial({ color: 0x15151a, roughness: 0.35, metalness: 0.4 })); g.add(ball);
+  const cap = new T.Mesh(new T.CylinderGeometry(0.1, 0.12, 0.14, 10), new T.MeshStandardMaterial({ color: 0x555a66 })); cap.position.y = 0.36; g.add(cap);
+  const fuse = new T.Mesh(new T.CylinderGeometry(0.025, 0.025, 0.22, 6), new T.MeshStandardMaterial({ color: 0xc9a46a })); fuse.position.set(0.05, 0.5, 0); fuse.rotation.z = -0.4; g.add(fuse);
+  const spark = new T.Mesh(new T.SphereGeometry(0.08, 8, 6), new T.MeshBasicMaterial({ color: 0xffb030 })); spark.position.set(0.1, 0.62, 0); g.add(spark); g.userData.spark = spark;
+  g.visible = false; return g;
+}
+const papaFuse = n => partyFast() ? 3 : Math.max(5, 10 - n * 1.2);
+function updatePapa(dt, played) {
+  const P = pState(), p = player, me = game.mp.me;
+  if (!P.bomb) {   // al empezar: la bomba le toca a alguien (igual para todos)
+    const ids = [me, ...teammates().map(r => r.uid)].sort();
+    P.bomb = { holder: ids[Math.floor(P.rnd() * ids.length)], fuse: papaFuse(0), n: 0, passCd: 1 };
+    if (P.bomb.holder === me) toast('¡Tienes la bomba! Pásala', 1600);
+  }
+  const B = P.bomb, bm = P.bombMesh, tnow = performance.now() / 1000;
+  B.fuse -= dt; B.passCd -= dt;
+  const holderPos = B.holder === me ? { x: p.x, y: p.y + p.h + 0.45, out: p.spect } : (() => { const r = remotes.get(B.holder); return r ? { x: r.x, y: r.y + 1.3 * r.sc + 0.45, out: r.ghost } : null; })();
+  bm.visible = !!holderPos && !holderPos.out;
+  if (holderPos) { bm.position.set(holderPos.x, holderPos.y, 0.2); bm.userData.spark.visible = Math.sin(tnow * (B.fuse < 3 ? 40 : 14)) > 0; bm.scale.setScalar(1 + (B.fuse < 3 ? Math.abs(Math.sin(tnow * 10)) * 0.25 : 0)); }
+  if (B.fuse < 3 && Math.floor(B.fuse * 2) !== Math.floor((B.fuse + dt) * 2)) beep(B.fuse < 1.5 ? 1400 : 900, 0.05, 'square', 0.03);
+  raceTimer.textContent = 'Papa caliente  ' + fmtTime(Math.max(0, P.t)) + '   ' + (B.holder === me ? '¡TIENES LA BOMBA!' : 'Bomba: ' + partyNames(B.holder)) + '  ' + Math.max(0, B.fuse).toFixed(1) + ' s';
+  if (B.holder !== me || p.spect) return;
+  p.slowT = Math.max(p.slowT || 0, 0.1);   // con la bomba se corre más rápido
+  if (B.passCd <= 0) for (const r of teammates()) {
+    if (r.ghost) continue;
+    if (Math.abs(r.x - p.x) < 0.85 && Math.abs(r.y - p.y) < 1.2) {
+      B.holder = r.uid; B.passCd = 0.8; net('pbomb', { r: P.r, u: r.uid, f: Math.round(B.fuse * 10) / 10 }); SFX.punch(); toast('¡Se la pasaste a ' + r.name + '!', 1000); return;
+    }
+  }
+  if (B.fuse <= 0) {   // explota en mis manos
+    const alive = teammates().filter(r => !r.ghost).map(r => r.uid).sort();
+    const next = alive.length ? alive[Math.floor(P.rnd() * alive.length)] : null;
+    papaBoom(me, next); net('pboom', { r: P.r, u: me, next });
+  }
+}
+function papaBoom(uid, next) {
+  const P = pState(); if (!P || !P.bomb) return;
+  const pos = uid === game.mp.me ? player : remotes.get(uid);
+  if (pos) { burstColor(pos.x, pos.y + 1, 0xff7a1a, 60, 9); burstColor(pos.x, pos.y + 1, 0x222222, 30, 6); }
+  SFX.boom(); shake = 0.6;
+  if (uid === game.mp.me) partyOut();
+  P.bomb.n++; P.bomb.holder = next; P.bomb.fuse = papaFuse(P.bomb.n); P.bomb.passCd = 1;
+  if (next === game.mp.me) toast('¡Ahora tienes la bomba!', 1400);
+}
+// ---------- Lluvia de monedas ----------
+function updateCoinRain(dt, played) {
+  const P = pState(), p = player;
+  P.drops.forEach(d => {
+    if (d.done || played < d.at) return;
+    let o = P.live.get(d.i);
+    if (!o) {
+      let m;
+      if (d.kind === 'r') { m = new T.Mesh(new T.DodecahedronGeometry(0.42), new T.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.9 })); }
+      else { m = makeCoinMesh(); if (d.kind === 'g') m.scale.setScalar(1.7); }
+      levelGroup.add(m); o = { m, floor: groundYAt(d.x) + (d.kind === 'r' ? 0.4 : 0.6) }; P.live.set(d.i, o);
+    }
+    const y = Math.max(o.floor, 13.5 - (played - d.at) * 7.5), landed = y <= o.floor;
+    o.m.position.set(d.x, y, 0); o.m.rotation.y += dt * 4; if (d.kind === 'r') o.m.rotation.z += dt * 3;
+    if (d.kind === 'r' && landed) { spawnFrag(d.x, y, MAT.stone, 4, 3); dropDone(d, o); return; }
+    if (landed && played - d.at > 13.5 / 7.5 + 4) { dropDone(d, o); return; }   // se van solas
+    if (p.spect || Math.abs(d.x - p.x) > 0.75 || Math.abs(y - (p.y + 0.7)) > 1.0) return;
+    if (d.kind === 'r') { if (p.invT <= 0) { p.stunT = 1; p.invT = 1.2; P.val = Math.max(0, P.val - 3); SFX.stomp(); shake = 0.3; toast('¡Roca! -3', 900); } dropDone(d, o); return; }
+    P.val += d.kind === 'g' ? 5 : 1; SFX.coin(); if (d.kind === 'g') toast('+5', 600);
+    net('pgrab', { r: P.r, i: d.i }); dropDone(d, o);
+  });
+}
+function dropDone(d, o) { const P = pState(); d.done = true; if (o) levelGroup.remove(o.m); P.live.delete(d.i); }
+// ---------- Luz roja, luz verde ----------
+function makeGoalLine() {
+  const g = new T.Group();
+  const tex = canvasTex((c, n) => { for (let y = 0; y < 8; y++) for (let x = 0; x < 2; x++) { c.fillStyle = (x + y) % 2 ? '#111' : '#fff'; c.fillRect(x * n / 2, y * n / 8, n / 2, n / 8); } });
+  const banner = new T.Mesh(new T.PlaneGeometry(1, 6), new T.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.85 })); banner.position.set(LUZ_GOAL + 0.5, 5, -0.6); g.add(banner);
+  [-1, 1].forEach(sd => { const pole = new T.Mesh(new T.CylinderGeometry(0.08, 0.08, 6.5, 8), new T.MeshStandardMaterial({ color: 0xdddddd })); pole.position.set(LUZ_GOAL + 0.5, 5.2, sd * 0.9); g.add(pole); });
+  return g;
+}
+function updateLuz(dt, played) {
+  const P = pState(), p = player;
+  let cur = P.lights[0]; for (const l of P.lights) { if (l.at <= played) cur = l; else break; }
+  if (cur !== P.curLight) { P.curLight = cur; P.redT = 0; document.getElementById('pLight').className = 'pl-' + cur.c; if (cur.c === 'r') beep(220, 0.25, 'square', 0.05); else if (cur.c === 'g') beep(880, 0.12, 'square', 0.04); }
+  if (cur.c === 'r') P.redT += dt;
+  if (P.finished) { P.val = Math.max(P.val, 100); p.stunT = Math.max(p.stunT || 0, 0.15); }
+  else {
+    P.val = Math.max(0, Math.min(99, (p.x - LUZ_START) / (LUZ_GOAL - LUZ_START) * 100));
+    if (p.x >= LUZ_GOAL) { P.finished = true; P.val = 100 + Math.max(0, P.t); SFX.oneup(); toast('¡Llegaste a la meta!', 1600); burstColor(p.x, p.y + 1, 0x39d98a, 40, 6); }
+    else if (cur.c === 'r' && P.redT > 0.3 && (Math.abs(p.vx) > 0.9 || (!p.grounded && Math.abs(p.vx) > 0.4))) {   // ¡te moviste en rojo!
+      p.x = Math.max(LUZ_START, p.x - 10); p.vx = 0; p.invT = 0.6; P.redT = -0.8; SFX.shrink(); shake = 0.25; toast('¡Te moviste en rojo! 10 pasos atrás', 1300);
+    }
+  }
+  raceTimer.textContent = 'Luz roja, luz verde  ' + fmtTime(Math.max(0, P.t)) + '   ' + (P.finished ? '¡En la meta!' : cur.c === 'g' ? '¡CORRE!' : cur.c === 'y' ? 'Cuidado...' : 'QUIETO');
+  const all = [P.finished, ...teammates().map(r => r.pv >= 100 || r.ghost)];
+  if (all.every(Boolean)) P.t = Math.min(P.t, 0);
+}
+
 function partyCrown(uid, mine) {
   const P = pState(); if (!P || P.g !== 'corona' || P.phase !== 'play') return;
   P.crown = uid; P.crownCd = 1.4;
@@ -1863,7 +2048,7 @@ function updateScoreHud(field, dt) {
   raceHud.replaceChildren(...rows.map((r, i) => {
     const d = document.createElement('div'); d.className = 'rrow' + (r.me ? ' me' : '') + (i === 0 && r.v > 0 ? ' done' : '');
     const a = document.createElement('b'); a.textContent = (i + 1) + '.';
-    const n = document.createElement('span'); n.textContent = r.name + '  ' + (pf ? (r.out ? 'fuera' : PARTY_GAMES[P.g].unit === 's' ? r.v.toFixed(1) + ' s' : Math.round(r.v) + ' pts') : r.v + (field === 'coins' ? ' mon.' : ' bugs'));
+    const n = document.createElement('span'); n.textContent = r.name + '  ' + (pf ? (r.out ? 'fuera' : partyFmt(PARTY_GAMES[P.g].unit, r.v)) : r.v + (field === 'coins' ? ' mon.' : ' bugs'));
     const bar = document.createElement('i'); bar.style.setProperty('--w', Math.round(r.v / max * 100) + '%');
     d.append(a, n, bar); return d;
   }));
@@ -2322,6 +2507,126 @@ addEventListener('keydown', e => {
 }, true);
 window.SENA_QUIZ = { open: openQuiz, answer: answerQuiz, close: closeQuiz, state: () => ({ open: quiz.open, answered: quiz.answered, id: quiz.cur && quiz.cur.id, right: quiz.cur && quiz.order.indexOf(quiz.cur.a) }) };
 
+
+function buildSong(def) {
+  const rnd = seeded(def.seed), sc = SCALES[def.sc];
+  const deg = d => def.root + sc[((d % 7) + 7) % 7] + 12 * Math.floor(d / 7);
+  const motif = (startDeg) => {
+    const notes = []; let d = startDeg;
+    for (let i = 0; i < 32; i++) {
+      const strong = i % 8 === 0, beat = i % 4 === 0, eighth = i % 2 === 0;
+      const p = strong ? 0.95 : beat ? 0.7 : eighth ? 0.45 : 0.15;
+      if (rnd() < p) { d += strong ? 0 : Math.round((rnd() - 0.5) * 4); d = Math.max(-2, Math.min(9, d)); notes.push(d); } else notes.push(null);
+    }
+    return notes;
+  };
+  const A = motif(4), B = motif(7);
+  const A2 = A.slice(); for (let i = 24; i < 32; i++) A2[i] = i === 24 ? 2 : i === 28 ? 0 : null;
+  const A3 = A.slice(); for (let i = 26; i < 32; i++) A3[i] = i === 28 ? 0 : null;
+  const mel = [...A, ...A2, ...B, ...A3].map(d => d === null ? null : deg(d + 7));
+  return { def, mel, deg, steps: mel.length };
+}
+function musicNoise() {
+  if (MUS.noise) return MUS.noise;
+  const b = actx.createBuffer(1, actx.sampleRate * 0.3, actx.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return (MUS.noise = b);
+}
+function mNote(t, midi, dur, type, vol) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type; o.frequency.setValueAtTime(440 * Math.pow(2, (midi - 69) / 12), t);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(MUS.gain); o.start(t); o.stop(t + dur + 0.02);
+}
+function mDrum(t, k) {
+  if (k === 'k') { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+    g.gain.setValueAtTime(0.16, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14); o.connect(g).connect(MUS.gain); o.start(t); o.stop(t + 0.16); return; }
+  const src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+  src.buffer = musicNoise(); f.type = k === 's' ? 'bandpass' : 'highpass'; f.frequency.value = k === 's' ? 1800 : 7000;
+  const d = k === 's' ? 0.12 : 0.04; g.gain.setValueAtTime(k === 's' ? 0.09 : 0.035, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  src.connect(f).connect(g).connect(MUS.gain); src.start(t); src.stop(t + d + 0.02);
+}
+function musicTick() {
+  if (!actx || !MUS.song) return;
+  const S = MUS.song, D = S.def, stepDur = 60 / D.bpm / 4;
+  while (MUS.next < actx.currentTime + 0.15) {
+    const t = MUS.next, i = MUS.step % S.steps, bar = Math.floor(i / 16), pos = i % 16;
+    const chord = D.prog[bar % D.prog.length], sc = SCALES[D.sc];
+    const n = S.mel[i]; if (n !== null) mNote(t, n, stepDur * (S.mel[(i + 1) % S.steps] === null ? 1.8 : 0.95), D.lead, D.lead === 'sawtooth' ? 0.022 : D.lead === 'triangle' ? 0.06 : 0.03);
+    if (pos % 2 === 0) { const bpat = [0, null, 12, null, 0, 0, 7, null][pos / 2]; if (bpat !== null) mNote(t, S.deg(chord) - 24 + bpat, stepDur * 1.6, 'triangle', 0.07); }
+    if (Math.floor(MUS.step / S.steps) % 2 === 1 || bar % 2 === 1) { const tone = [0, 2, 4, 2][pos % 4]; mNote(t, S.deg(chord + tone) + 12, stepDur * 0.8, 'triangle', 0.014); }
+    const dr = D.drums[bar % D.drums.length][pos]; if (dr && dr !== '.') mDrum(t, dr);
+    MUS.next += stepDur; MUS.step++;
+  }
+}
+function setMusic(name) {
+  if (name === MUS.cur || !actx) return;
+  MUS.cur = name;
+  if (!MUS.gain) { MUS.gain = actx.createGain(); MUS.gain.gain.value = 0; MUS.gain.connect(actx.destination); MUS.timer = setInterval(musicTick, 30); }
+  const g = MUS.gain.gain, t = actx.currentTime;
+  g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); g.linearRampToValueAtTime(0.0001, t + 0.25);
+  setTimeout(() => {
+    if (MUS.cur !== name) return;
+    MUS.song = name && SONGS[name] ? buildSong(SONGS[name]) : null; MUS.step = 0; MUS.next = actx.currentTime + 0.05;
+    musicVolume();
+  }, 280);
+}
+function musicVolume() { if (!MUS.gain) return; const t = actx.currentTime, v = muted || !MUS.song ? 0.0001 : MUS.vol * 0.9 + 0.0001; MUS.gain.gain.cancelScheduledValues(t); MUS.gain.gain.setValueAtTime(MUS.gain.gain.value, t); MUS.gain.gain.linearRampToValueAtTime(v, t + 0.3); }
+function pickMusic() {
+  if (!actx || document.hidden) return;
+  const st = game.state;
+  let want = '';
+  if (st === 'title' || st === 'over' || document.body.classList.contains('editing')) want = 'menu';
+  else if (st === 'map') want = 'map';
+  else if (st === 'play' || st === 'win') {
+    const md = game.mp && game.mp.mode;
+    if (md === 'party' || md === 'battle') want = 'party';
+    else if (md === 'race') want = 'race';
+    else if (md === 'survival' || (bossE && bossE.alive)) want = 'boss';
+    else if (game.custom) { const th = game.custom.spec.theme; want = th === 'lava' ? 'w2' : ['sky', 'icesky', 'storm', 'datahwy'].includes(th) ? 'w3' : 'w1'; }
+    else want = ['w1', 'w2', 'w3'][game.world] || 'w1';
+  }
+  setMusic(want);
+}
+setInterval(pickMusic, 400);
+document.addEventListener('visibilitychange', () => { if (MUS.gain && actx) { if (document.hidden) MUS.gain.gain.value = 0.0001; else musicVolume(); } });
+window.SENA_MUSIC = { setVolume(v) { MUS.vol = Math.max(0, Math.min(1, v)); try { localStorage.setItem('senabros_music', String(MUS.vol)); } catch (_) {} musicVolume(); }, get volume() { return MUS.vol; }, get track() { return MUS.cur; }, get steps() { return MUS.step; } };
+
+
+// ================= Gestos (saludar, bailar, burla, festejar) =================
+// Teclas 1-4 durante el nivel (o el panel de chat en línea). Los demás ven la animación y una carita encima.
+const EMOTES = {
+  saludo: { name: 'Saludar', face: 'pulgar', dur: 1.9 },
+  baile:  { name: 'Bailar', face: 'fuego', dur: 3.4 },
+  burla:  { name: 'Burla', face: 'burla', dur: 2.2 },
+  fiesta: { name: 'Festejar', face: 'risa', dur: 2.8 },
+};
+const EMOTE_KEYS = { Digit1: 'saludo', Digit2: 'baile', Digit3: 'burla', Digit4: 'fiesta', Numpad1: 'saludo', Numpad2: 'baile', Numpad3: 'burla', Numpad4: 'fiesta' };
+const localUid = () => game.mp ? game.mp.me : 'yo';
+function doEmote(id) {
+  const p = player, E = EMOTES[id];
+  if (!E || game.state !== 'play' || p.dead || p.ghost || p.spect || !p.grounded || (quiz && quiz.open)) return;
+  p.emote = { id, t: 0, step: -1 }; p.vx = 0;
+  showBubble(localUid(), 'f', E.face);
+  net('emote', { k: id });
+}
+function updateEmote(dt) {
+  const p = player, em = p.emote; if (!em) return;
+  if (p.dead || !p.grounded && em.id !== 'fiesta' || Math.abs(p.vx) > 1.5 && em.id !== 'fiesta') { p.emote = null; return; }
+  em.t += dt; const E = EMOTES[em.id];
+  if (em.t >= E.dur) { p.emote = null; play('M_Idle', { fade: 0.2 }); return; }
+  if (em.id === 'saludo' && em.step < 0) { em.step = 0; play('M_Victory', { loop: false, fade: 0.1 }); }
+  if (em.id === 'baile') { const s = Math.floor(em.t / 0.42); if (s !== em.step) { em.step = s; if (s % 2 === 0) p.facing = -p.facing; play(s % 2 ? 'M_Crouch' : 'M_Punch', { loop: false, fade: 0.06, speed: 1.3 }); } }
+  if (em.id === 'burla') { const s = Math.floor(em.t / 0.36); if (s !== em.step) { em.step = s; play(s % 2 ? 'M_Idle' : 'M_Crouch', { loop: s % 2 === 1, fade: 0.05 }); } }
+  if (em.id === 'fiesta') {
+    const s = em.t < 0.9 ? 0 : em.t < 1.8 ? 1 : 2;
+    if (s !== em.step) { em.step = s; if (s < 2 && p.grounded) { p.vy = 10; p.grounded = false; play('M_Jump', { loop: false, fade: 0.05 }); } else if (s === 2) play('M_Victory', { loop: false, fade: 0.1 });
+      burstColor(p.x, p.y + 1.6, [0xffd23f, 0x39d98a, 0xff5a7a][s], 26, 6); SFX.coin(); }
+  }
+}
+window.SENA_EMOTE = doEmote;
+window.SENA_EMOTES = EMOTES;
+
 // ================= Retos entre amigos =================
 const CHALLENGE_LABEL = { coins: 'MONEDAS', kills: 'BUGS', score: 'PUNTOS', time_left: 'TIEMPO RESTANTE' };
 window.SENA_LEVELS = () => WORLDS.flatMap((Wd, w) => Array.from({ length: Wd.count }, (_, i) => ({ world: w + 1, level: i + 1, name: levelSpec(i, w).name })));
@@ -2426,7 +2731,12 @@ function die() {
 // recibir daño: si es grande se encoge, si es pequeño muere
 function damage() {
   if (player.ghost || player.spect) return;
-  if (game.mp && game.mp.mode === 'party') { if (player.invT <= 0) partyOut(); return; }
+  if (game.mp && game.mp.mode === 'party') {
+    const P = pState(); if (player.invT > 0 || !P) return;
+    if (PARTY_GAMES[P.g] && PARTY_GAMES[P.g].surv) partyOut();
+    else { player.stunT = 1; player.invT = 1.6; shake = 0.3; SFX.shrink(); if (P.g === 'caza') { P.val = Math.max(0, P.val - 1); toast('¡Te tocó un bug! -1', 900); } }
+    return;
+  }
   if (game.mp && game.mp.mode === 'battle') {
     if (player.invT > 0) return;
     const n = Math.min(3, game.coins); game.coins -= n; player.invT = 1.6; shake = 0.25; SFX.shrink();
@@ -2470,6 +2780,7 @@ function killEnemy(e, how) {
   if (e.def.kind === 'boss' && how !== 'boss') return;   // al jefe solo se le vence pisándolo
   if (e.uid != null && e.def.kind !== 'boss') net('kill', { u: e.uid, h: how === 'stomp' ? 1 : 0 });
   e.alive = false; e.deadT = 0; e.mode = how; addScore(e.def.score * (how === 'stomp' ? 1 : 2));
+  { const P = pState(); if (!netMute && P && P.g === 'caza' && P.phase === 'play') { P.val += e.type === 'archivo-corrupto' ? 2 : 1; toast('+' + (e.type === 'archivo-corrupto' ? 2 : 1), 500); } }
   if (e.type !== 'bullet') { addEnergy(2); missionProgress('kills'); if (!netMute) { game.runKills = (game.runKills || 0) + 1; addStat('kills'); } }
   if (how === 'stomp') { SFX.stomp(); e.body.scale.y = 0.3 * e.def.scale; spawnFrag(e.x, e.y + 0.3, MAT.stone, 4, 3); }
   else { SFX.punch(); e.vy = 9; e.vx = player.facing * 3; e.mesh.rotation.z = Math.PI; }
@@ -2502,6 +2813,11 @@ function doPunch() {
   enemies.forEach(e => {
     const dx = (e.x - p.x) * p.facing;
     if (e.alive && dx > -0.1 && dx < 1.7 && Math.abs(e.y - p.y) < 1.1) killEnemy(e, 'flip');
+  });
+  const P = pState();
+  if (P && P.phase === 'play' && P.g !== 'duelo') teammates().forEach(r => {   // en la fiesta los golpes empujan
+    const dx = (r.x - p.x) * p.facing;
+    if (!r.ghost && dx > -0.1 && dx < 1.8 && Math.abs(r.y - p.y) < 1.2) { net('ppush', { u: r.uid, d: p.facing }); burstColor(r.x, r.y + 1, 0xffffff, 12, 4); SFX.stomp(); }
   });
 }
 function poundLand() {
@@ -2867,7 +3183,8 @@ addEventListener('keydown', e => {
   if (e.repeat) return;
   keys[e.code] = true;
   for (const k in MAP) if (MAP[k].includes(e.code)) pressed[k] = true;
-  if (e.code === 'KeyM') muted = !muted;
+  if (e.code === 'KeyM') { muted = !muted; musicVolume(); }
+  if (EMOTE_KEYS[e.code] && game.state === 'play') doEmote(EMOTE_KEYS[e.code]);
   if (inMenu()) {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') selectChar(charIdx - 1);
     if (e.code === 'ArrowRight' || e.code === 'KeyD') selectChar(charIdx + 1);
@@ -2929,6 +3246,8 @@ function updatePlayer(dt) {
   } else {
     p.crouch = p.grounded && down;
     let dir = p.stunT > 0 ? 0 : (right ? 1 : 0) - (left ? 1 : 0);
+    if (p.emote && (dir || pressed.jump || pressed.punch)) p.emote = null;
+    if (p.emote) dir = 0;
     if (p.crouch || (p.punchT > 0 && p.grounded)) dir = 0;
     const max = (run ? RUN : WALK) * (p.slowT > 0 ? 1.35 : 1);
     if (dir) {
@@ -2969,6 +3288,7 @@ function updatePlayer(dt) {
   const S = p.big ? SIZE.big : SIZE.small;
   p.hw = S.hw; p.h = p.crouch ? S.hc : S.h;
 
+  if (p.kbT > 0) { p.kbT -= dt; p.vx = p.kbV * (0.35 + p.kbT * 1.8); }   // salir volando por un golpe
   const wasGround = p.grounded, fallV = p.vy;
   if (moveX(p, p.vx * dt)) p.vx = 0;
   if (p.grounded) { const b = beltUnder(p); if (b) moveX(p, b.dir * 3.4 * dt); }   // la cinta arrastra
@@ -3012,7 +3332,7 @@ function updatePlayer(dt) {
 
 function chooseAnim() {
   const p = player;
-  if (p.dead || game.state !== 'play' || p.pound || p.punchT > 0 || p.powerAnimT > 0) return;
+  if (p.dead || game.state !== 'play' || p.pound || p.punchT > 0 || p.powerAnimT > 0 || p.emote) return;
   if (p.dashT > 0) { play('M_Run', { speed: 2.4, fade: 0.05 }); return; }
   if (!p.grounded && WATER_LVL) {
     play(actions.M_Swim ? 'M_Swim' : 'M_Fall', { speed: p.strokeT > 0 ? 2.3 : 0.85, fade: 0.25 });
@@ -3167,7 +3487,7 @@ function update(dt) {
   }
   const tnow = performance.now() / 1000;
   coins.forEach(c => { if (!c.taken) { c.m.rotation.y = tnow * 2.2 + c.ph; c.m.position.y = c.y + Math.sin(tnow * 3 + c.ph) * 0.08; } });
-  updateRemotes(dt); updateMpFx(dt); updateTrails(dt);
+  updateRemotes(dt); updateMpFx(dt); updateTrails(dt); updateEmote(dt);
   updatePowerups(dt); updateLevelFx(dt); updateSprings(dt); updateBolts(dt); updateSparks(dt); updatePfx(dt); updatePowerUI();
   if (MAT.lava.map) { MAT.lava.map.offset.x = tnow * 0.05; MAT.lava.map.offset.y = Math.sin(tnow * 0.7) * 0.04; MAT.lava.emissiveIntensity = 0.8 + Math.sin(tnow * 3) * 0.15; }
   if (flag) flag.userData.cloth.rotation.y = Math.sin(tnow * 3) * 0.15;
