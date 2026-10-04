@@ -108,9 +108,9 @@ $('achBack').onclick = closeScr;
 
 // ================= Tienda =================
 const SLOT_NAME = { cabeza: 'Cabeza', cara: 'Cara', espalda: 'Espalda', estela: 'Estela' };
-const ITEM_ICON = { mago: 'wizard', vikingo: 'viking', copa: 'tophat', gato: 'cat', aureola: 'halo', visor: 'visor', alas: 'wings', jetpack: 'jetpack', gorra: 'cap', casco: 'helmet', audifonos: 'headphones', vueltiao: 'hat', corona: 'crown', gafas_sol: 'glasses', gafas_dev: 'glasses2',
+const ITEM_ICON = { mago: 'wizard', vikingo: 'viking', copa: 'tophat', gato: 'cat', aureola: 'halo', visor: 'visor', alas: 'wings', jetpack: 'jetpack', gorro_navidad: 'santa', cuernos: 'horns', corona_rey: 'crown', astronauta: 'astro', capa_heroe: 'cape', gorra: 'cap', casco: 'helmet', audifonos: 'headphones', vueltiao: 'hat', corona: 'crown', gafas_sol: 'glasses', gafas_dev: 'glasses2',
   mochila: 'backpack', capa_roja: 'cape', capa_sena: 'cape', estela_verde: 'sparkle', estela_dorada: 'sparkle', estela_arcoiris: 'sparkle' };
-const ITEM_TINT = { mago: '#8a6aff', vikingo: '#cfd6e0', copa: '#ff5a6a', gato: '#ff8fb8', aureola: '#ffd84a', visor: '#39e6ff', alas: '#eaf2ff', jetpack: '#ff7a1a', gorra: '#39a900', casco: '#ffc21a', audifonos: '#39d98a', vueltiao: '#efe3c2', corona: '#ffc81a', gafas_sol: '#cfd6e0', gafas_dev: '#9ad7ff',
+const ITEM_TINT = { mago: '#8a6aff', vikingo: '#cfd6e0', copa: '#ff5a6a', gato: '#ff8fb8', aureola: '#ffd84a', visor: '#39e6ff', alas: '#eaf2ff', jetpack: '#ff7a1a', gorro_navidad: '#e8333d', cuernos: '#d0141f', corona_rey: '#ffc81a', astronauta: '#dfe8ff', capa_heroe: '#e0203a', gorra: '#39a900', casco: '#ffc21a', audifonos: '#39d98a', vueltiao: '#efe3c2', corona: '#ffc81a', gafas_sol: '#cfd6e0', gafas_dev: '#9ad7ff',
   mochila: '#39a900', capa_roja: '#ff4a55', capa_sena: '#39a900', estela_verde: '#39d98a', estela_dorada: '#ffd23f', estela_arcoiris: '#ff7ad9' };
 const shop = { slot: 'cabeza', sel: null, busy: false };
 function shopEq() { const eq = SENA_SHOP.eq(); if (shop.sel) eq[shop.sel.slot] = shop.sel.id; return eq; }

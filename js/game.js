@@ -2346,6 +2346,11 @@ const SHOP = [
   { id: 'visor', slot: 'cara', name: 'Visor cyber', price: 350, pro: true },
   { id: 'alas', slot: 'espalda', name: 'Alas de ángel', price: 700, pro: true },
   { id: 'jetpack', slot: 'espalda', name: 'Jetpack', price: 600, pro: true },
+  { id: 'gorro_navidad', slot: 'cabeza', name: 'Gorro de Navidad', price: 150, pro: true },
+  { id: 'cuernos', slot: 'cabeza', name: 'Cuernos de diablo', price: 200, pro: true },
+  { id: 'corona_rey', slot: 'cabeza', name: 'Corona real', price: 400, pro: true },
+  { id: 'astronauta', slot: 'cabeza', name: 'Casco de astronauta', price: 450, pro: true },
+  { id: 'capa_heroe', slot: 'espalda', name: 'Capa de héroe', price: 300, pro: true },
   // clásicas
   { id: 'gorra', slot: 'cabeza', name: 'Gorra SENA', price: 0 },
   { id: 'casco', slot: 'cabeza', name: 'Casco de obra', price: 0 },
@@ -2411,7 +2416,7 @@ function vueltiaoTex() {
 // ---------- Ropa modelada en Blender: se carga solo cuando alguien la usa ----------
 // Cada .glb está hecho para una cabeza de 1 de ancho (origen en la coronilla), la cara (origen al frente, a la altura
 // de los ojos) o la espalda (origen en la espalda, 1 = ancho del pecho). Aquí solo se escala y se ubica.
-const PRO_ITEMS = { mago: 'cabeza', vikingo: 'cabeza', copa: 'cabeza', gato: 'cabeza', aureola: 'cabeza', visor: 'cara', alas: 'espalda', jetpack: 'espalda' };
+const PRO_ITEMS = { mago: 'cabeza', vikingo: 'cabeza', copa: 'cabeza', gato: 'cabeza', aureola: 'cabeza', visor: 'cara', alas: 'espalda', jetpack: 'espalda', gorro_navidad: 'cabeza', cuernos: 'cabeza', corona_rey: 'cabeza', astronauta: 'cabeza', capa_heroe: 'espalda' };
 const proCache = {}, proLoading = {};
 function loadPro(id) {
   if (proCache[id] || proLoading[id]) return;
@@ -2425,7 +2430,7 @@ function loadPro(id) {
 function buildPro(id, f) {
   const src = proCache[id]; if (!src) { loadPro(id); return null; }
   const g = src.clone(true), W = f.size.x;
-  if (PRO_ITEMS[id] === 'cabeza') { const k = id === 'gato' ? 1.35 : 1.14; g.scale.setScalar(W * k); g.position.set(f.center.x, f.max.y - W * 0.04, f.center.z); }
+  if (PRO_ITEMS[id] === 'cabeza') { const k = id === 'gato' ? 1.35 : id === 'astronauta' ? 1.12 : id === 'cuernos' ? 1.2 : 1.14; g.scale.setScalar(W * k); g.position.set(f.center.x, f.max.y - W * (id === 'astronauta' ? 0.3 : 0.04), f.center.z); }
   else if (PRO_ITEMS[id] === 'cara') { g.scale.setScalar(W * 0.98); g.position.set(f.center.x, f.min.y + f.size.y * 0.53, f.max.z - W * 0.04); }
   else { g.scale.setScalar(W * (id === 'jetpack' ? 1.25 : 1.1)); g.position.set(f.center.x, f.center.y + (id === 'alas' ? f.size.y * 0.15 : -f.size.y * 0.05), f.min.z + W * 0.04); }
   return g;
@@ -3253,6 +3258,9 @@ const ICONS = {
   viking:   '<path d="M6 15a6 6 0 0 1 12 0"/><path d="M5 15h14"/><path d="M6 13c-2-1-3-4-2-7 1 2 2 3 4 4M18 13c2-1 3-4 2-7-1 2-2 3-4 4"/><path d="M12 15v4"/>',
   tophat:   '<path d="M4 18h16"/><path d="M7 18V6h10v12"/><path d="M7 14h10"/>',
   cat:      '<path d="M4 18c0-5 3-8 8-8s8 3 8 8"/><path d="M6 12L5 4l5 4M18 12l1-8-5 4"/>',
+  santa:    '<path d="M4 19h14"/><path d="M6 19c0-6 3-11 9-12 2 2 2 5 1 8"/><circle cx="17.5" cy="16.5" r="1.6"/>',
+  horns:    '<path d="M5 18a7 5 0 0 0 14 0"/><path d="M7 15C5 12 5 8 7 5c1 3 2 6 3 8M17 15c2-3 2-7 0-10-1 3-2 6-3 8"/>',
+  astro:    '<circle cx="12" cy="11" r="8"/><rect x="7" y="8" width="10" height="6" rx="3"/><path d="M8 20h8"/>',
   halo:     '<ellipse cx="12" cy="8" rx="8" ry="3"/><path d="M8 15a4 4 0 0 0 8 0"/>',
   visor:    '<path d="M3 11c3-2 15-2 18 0v3c-3 2-15 2-18 0z"/><path d="M7 12.5h10"/>',
   wings:    '<path d="M12 8c-2-3-6-4-9-3 1 5 4 9 9 10"/><path d="M12 8c2-3 6-4 9-3-1 5-4 9-9 10"/><path d="M12 8v10"/>',

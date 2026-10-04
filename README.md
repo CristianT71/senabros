@@ -59,7 +59,7 @@ SenaBros/
   Se escribe solo con la función `submit_score` (el servidor valida tablero y rango) y se lee con `get_ranking`.
 - **Logros** (botón Logros): 17 logros que salen de contadores (`game_progress.stats`: bugs, monedas ganadas, carreras...).
 - **Tienda** (botón Tienda): 21 prendas y estelas que se ajustan a la cabeza y espalda de cada instructor. Las 8 nuevas
-  (mago, vikingo, copa, gato, aureola, visor, alas, jetpack) están modeladas en Blender: el archivo editable es
+  (mago, vikingo, copa, gato, aureola, visor, alas, jetpack, gorro de Navidad, cuernos, corona real, casco de astronauta, capa de héroe) están modeladas en Blender: el archivo editable es
   `fuentes/ropa_premium.blend` y los .glb comprimidos están en `assets/modelos/ropa/` (se cargan solo cuando alguien las usa).
 - **Perfil de otros jugadores:** tocando su nombre en la sala, el ranking, los amigos o la comunidad: vista 3D con su ropa,
   estadísticas, logros y botón para agregarlo (función `get_public_profile`, solo datos de juego).
@@ -129,7 +129,7 @@ Se genera con código (Web Audio): cada mundo, el mapa, el menú, el jefe, la ca
 Agrega al final de la dirección:
 
 - `#test=2-5` abre el nivel 2-5
-- `#test=map2` abre el mapa del Mundo 2 (`#test=3-4` abre la Tormenta Eléctrica del Mundo 3)
+- `#test=map2` abre el mapa del Mundo 2 (`#test=3-4` abre la Tormenta Eléctrica del Mundo 3, `#test=4-3` el Laboratorio de Láseres del Mundo 4)
 - `#test=1-3;c=Juan` abre el 1-3 con Juan
 
 ## Modo online (Supabase)
