@@ -58,7 +58,7 @@ SenaBros/
   batalla y oleada más alta en supervivencia. Se reinicia cada lunes (hora de Colombia); el primero lleva corona, también en la sala.
   Se escribe solo con la función `submit_score` (el servidor valida tablero y rango) y se lee con `get_ranking`.
 - **Logros** (botón Logros): 17 logros que salen de contadores (`game_progress.stats`: bugs, monedas ganadas, carreras...).
-- **Tienda** (botón Tienda): 21 prendas y estelas que se ajustan a la cabeza y espalda de cada instructor. Las 8 nuevas
+- **Tienda** (botón Tienda): 26 prendas y estelas que se ajustan a la cabeza y espalda de cada instructor. Las 13 modeladas
   (mago, vikingo, copa, gato, aureola, visor, alas, jetpack, gorro de Navidad, cuernos, corona real, casco de astronauta, capa de héroe) están modeladas en Blender: el archivo editable es
   `fuentes/ropa_premium.blend` y los .glb comprimidos están en `assets/modelos/ropa/` (se cargan solo cuando alguien las usa).
 - **Perfil de otros jugadores:** tocando su nombre en la sala, el ranking, los amigos o la comunidad: vista 3D con su ropa,
