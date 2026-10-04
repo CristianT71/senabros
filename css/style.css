@@ -1095,3 +1095,7 @@ body.touch #tuto { top: 64px; }
   .pc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-height: 520px) { .pc-card { grid-template-columns: 200px minmax(0, 1fr); } #pcView { height: 240px; } .pc-head b { font-size: 18px; } }
+
+/* ropa nueva (modelada en Blender) */
+.item.pro { border-color: #ff7ad966; background: linear-gradient(180deg, #ff7ad914, #0006); }
+.item.pro::before { content: "NUEVO"; position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 6px; background: #ff7ad9; color: #2a1060; font: 900 9px "Trebuchet MS", sans-serif; letter-spacing: 1px; }

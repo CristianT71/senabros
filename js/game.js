@@ -2165,6 +2165,16 @@ function mpFinish() {
 
 // ---------- Tienda: ropa 3D que se ajusta a la cabeza y la espalda de cada instructor ----------
 const SHOP = [
+  // modeladas en Blender (assets/modelos/ropa/<id>.glb)
+  { id: 'mago', slot: 'cabeza', name: 'Sombrero de mago', price: 1200, pro: true },
+  { id: 'vikingo', slot: 'cabeza', name: 'Casco vikingo', price: 1600, pro: true },
+  { id: 'copa', slot: 'cabeza', name: 'Sombrero de copa', price: 1000, pro: true },
+  { id: 'gato', slot: 'cabeza', name: 'Orejas de gato', price: 900, pro: true },
+  { id: 'aureola', slot: 'cabeza', name: 'Aureola', price: 1800, pro: true },
+  { id: 'visor', slot: 'cara', name: 'Visor cyber', price: 1300, pro: true },
+  { id: 'alas', slot: 'espalda', name: 'Alas de ángel', price: 2500, pro: true },
+  { id: 'jetpack', slot: 'espalda', name: 'Jetpack', price: 2200, pro: true },
+  // clásicas
   { id: 'gorra', slot: 'cabeza', name: 'Gorra SENA', price: 150 },
   { id: 'casco', slot: 'cabeza', name: 'Casco de obra', price: 300 },
   { id: 'audifonos', slot: 'cabeza', name: 'Audífonos', price: 450 },
@@ -2225,8 +2235,33 @@ function vueltiaoTex() {
     for (let x = 0; x < n; x += n / 8) for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(x, i * n / 6 + n / 12); g.lineTo(x + n / 16, i * n / 6 + n / 7); g.lineTo(x + n / 8, i * n / 6 + n / 12); g.fill(); }
   }));
 }
+
+// ---------- Ropa modelada en Blender: se carga solo cuando alguien la usa ----------
+// Cada .glb está hecho para una cabeza de 1 de ancho (origen en la coronilla), la cara (origen al frente, a la altura
+// de los ojos) o la espalda (origen en la espalda, 1 = ancho del pecho). Aquí solo se escala y se ubica.
+const PRO_ITEMS = { mago: 'cabeza', vikingo: 'cabeza', copa: 'cabeza', gato: 'cabeza', aureola: 'cabeza', visor: 'cara', alas: 'espalda', jetpack: 'espalda' };
+const proCache = {}, proLoading = {};
+function loadPro(id) {
+  if (proCache[id] || proLoading[id]) return;
+  proLoading[id] = loadGLB('modelos/ropa/' + id + '.glb').then(g => {
+    g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.geometry.userData.keep = true; if (o.material && o.material.transparent) o.material.depthWrite = false; } });
+    proCache[id] = g.scene;
+    redress(); remotes.forEach(r => r.model && dressModel(r.model, r.eq));   // ponérsela a quien la estaba esperando
+    if (PREV.model && PREV.eq) dressModel(PREV.model, PREV.eq);
+  }).catch(err => console.warn('ropa', id, err));
+}
+function buildPro(id, f) {
+  const src = proCache[id]; if (!src) { loadPro(id); return null; }
+  const g = src.clone(true), W = f.size.x;
+  if (PRO_ITEMS[id] === 'cabeza') { const k = id === 'gato' ? 1.35 : 1.14; g.scale.setScalar(W * k); g.position.set(f.center.x, f.max.y - W * 0.04, f.center.z); }
+  else if (PRO_ITEMS[id] === 'cara') { g.scale.setScalar(W * 0.98); g.position.set(f.center.x, f.min.y + f.size.y * 0.53, f.max.z - W * 0.04); }
+  else { g.scale.setScalar(W * (id === 'jetpack' ? 1.25 : 1.1)); g.position.set(f.center.x, f.center.y + (id === 'alas' ? f.size.y * 0.15 : -f.size.y * 0.05), f.min.z + W * 0.04); }
+  return g;
+}
+
 // Construye una prenda en el marco del hueso (x = derecha, y = arriba, z = frente). f = caja de la cabeza o del pecho.
 function buildAcc(id, f) {
+  if (PRO_ITEMS[id]) return buildPro(id, f) || new T.Group();
   const g = new T.Group(), W = f.size.x, H = f.size.y, D = f.size.z, cx = f.center.x, cz = f.center.z, top = f.max.y, front = f.max.z, back = f.min.z;
   const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new T.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; g.add(m); return m; };
   const R = Math.max(W, D) * 0.5;
@@ -2652,7 +2687,7 @@ async function previewMount(canvas, file, eq) {
   const idle = clips.find(c => c.name === 'M_Idle'), vic = clips.find(c => c.name === 'M_Victory');
   if (vic) { const a = mixer.clipAction(vic); a.setLoop(T.LoopOnce, 1); a.clampWhenFinished = true; a.play(); mixer.addEventListener('finished', () => { if (idle) mixer.clipAction(idle).reset().fadeIn(0.3).play(); }); }
   else if (idle) mixer.clipAction(idle).play();
-  Object.assign(PREV, { r, scene: sc, cam, model: m, mixer, t: performance.now() });
+  Object.assign(PREV, { r, scene: sc, cam, model: m, mixer, eq: eq || {}, t: performance.now() });
   const loop = now => {
     if (PREV.r !== r) return;
     const dt = Math.min(0.05, (now - PREV.t) / 1000); PREV.t = now;
@@ -2663,7 +2698,7 @@ async function previewMount(canvas, file, eq) {
 }
 function previewUnmount() {
   cancelAnimationFrame(PREV.raf);
-  if (PREV.r) { PREV.scene.traverse(o => { if (o.geometry && !FIT.has(o.geometry)) o.geometry.dispose(); }); PREV.r.dispose(); }
+  if (PREV.r) { PREV.scene.traverse(o => { if (o.geometry && !FIT.has(o.geometry) && !o.geometry.userData.keep) o.geometry.dispose(); }); PREV.r.dispose(); }
   Object.assign(PREV, { r: null, scene: null, model: null, mixer: null });
 }
 window.SENA_PREVIEW = { mount: previewMount, unmount: previewUnmount };
@@ -2970,6 +3005,14 @@ const ICONS = {
   glasses2: '<rect x="2.5" y="9.5" width="8" height="6" rx="1"/><rect x="13.5" y="9.5" width="8" height="6" rx="1"/><path d="M10.5 12h3"/>',
   backpack: '<rect x="5" y="6" width="14" height="15" rx="3"/><path d="M9 6V4h6v2M8 14h8v4H8z"/>',
   cape:     '<path d="M7 3h10l1 3c2 5 2 10 3 15H3c1-5 1-10 3-15z"/><path d="M9 3c0 2 1.3 3 3 3s3-1 3-3"/>',
+  wizard:   '<path d="M5 20h14"/><path d="M7 20c1.5-5 3-10 9-16-1 5 0 9 2 16"/><path d="M11 13l1 1M14 9l1 1"/>',
+  viking:   '<path d="M6 15a6 6 0 0 1 12 0"/><path d="M5 15h14"/><path d="M6 13c-2-1-3-4-2-7 1 2 2 3 4 4M18 13c2-1 3-4 2-7-1 2-2 3-4 4"/><path d="M12 15v4"/>',
+  tophat:   '<path d="M4 18h16"/><path d="M7 18V6h10v12"/><path d="M7 14h10"/>',
+  cat:      '<path d="M4 18c0-5 3-8 8-8s8 3 8 8"/><path d="M6 12L5 4l5 4M18 12l1-8-5 4"/>',
+  halo:     '<ellipse cx="12" cy="8" rx="8" ry="3"/><path d="M8 15a4 4 0 0 0 8 0"/>',
+  visor:    '<path d="M3 11c3-2 15-2 18 0v3c-3 2-15 2-18 0z"/><path d="M7 12.5h10"/>',
+  wings:    '<path d="M12 8c-2-3-6-4-9-3 1 5 4 9 9 10"/><path d="M12 8c2-3 6-4 9-3-1 5-4 9-9 10"/><path d="M12 8v10"/>',
+  jetpack:  '<rect x="5" y="4" width="5" height="12" rx="2.5"/><rect x="14" y="4" width="5" height="12" rx="2.5"/><path d="M7.5 16l-1 4M16.5 16l1 4M10 8h4"/>',
   sparkle:  '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
 };
 window.SENA_ICON = (n, size) => iconSvg(n, size);
@@ -4057,7 +4100,7 @@ Promise.all(enemyEntries.map(name =>
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
   if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), specAt: (w, i) => levelSpec(i, w), partyRound, blockMat: (x, y) => { const m = blockMesh[x + ',' + y]; return m ? (m.material === MAT.quiz ? 'quiz' : m.material === MAT.question ? 'question' : 'otro') : null; }, gridAt: (x, y) => grid[x] && grid[x][y], boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
-    remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName, cos: r.cos || '' })) };   // solo en modo prueba
+    remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName, cos: r.cos || '', acc: (() => { let n = 0; if (r.model) r.model.traverse(o => { if (o.userData.isAcc) n++; }); return n; })() })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
     if (tc) await selectChar(CHARS.findIndex(c => c[0] === tc[1]));

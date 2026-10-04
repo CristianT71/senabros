@@ -93,9 +93,9 @@ $('achBack').onclick = closeScr;
 
 // ================= Tienda =================
 const SLOT_NAME = { cabeza: 'Cabeza', cara: 'Cara', espalda: 'Espalda', estela: 'Estela' };
-const ITEM_ICON = { gorra: 'cap', casco: 'helmet', audifonos: 'headphones', vueltiao: 'hat', corona: 'crown', gafas_sol: 'glasses', gafas_dev: 'glasses2',
+const ITEM_ICON = { mago: 'wizard', vikingo: 'viking', copa: 'tophat', gato: 'cat', aureola: 'halo', visor: 'visor', alas: 'wings', jetpack: 'jetpack', gorra: 'cap', casco: 'helmet', audifonos: 'headphones', vueltiao: 'hat', corona: 'crown', gafas_sol: 'glasses', gafas_dev: 'glasses2',
   mochila: 'backpack', capa_roja: 'cape', capa_sena: 'cape', estela_verde: 'sparkle', estela_dorada: 'sparkle', estela_arcoiris: 'sparkle' };
-const ITEM_TINT = { gorra: '#39a900', casco: '#ffc21a', audifonos: '#39d98a', vueltiao: '#efe3c2', corona: '#ffc81a', gafas_sol: '#cfd6e0', gafas_dev: '#9ad7ff',
+const ITEM_TINT = { mago: '#8a6aff', vikingo: '#cfd6e0', copa: '#ff5a6a', gato: '#ff8fb8', aureola: '#ffd84a', visor: '#39e6ff', alas: '#eaf2ff', jetpack: '#ff7a1a', gorra: '#39a900', casco: '#ffc21a', audifonos: '#39d98a', vueltiao: '#efe3c2', corona: '#ffc81a', gafas_sol: '#cfd6e0', gafas_dev: '#9ad7ff',
   mochila: '#39a900', capa_roja: '#ff4a55', capa_sena: '#39a900', estela_verde: '#39d98a', estela_dorada: '#ffd23f', estela_arcoiris: '#ff7ad9' };
 const shop = { slot: 'cabeza', sel: null, busy: false };
 function shopEq() { const eq = SENA_SHOP.eq(); if (shop.sel) eq[shop.sel.slot] = shop.sel.id; return eq; }
@@ -107,7 +107,7 @@ function renderShop() {
   $('shopGrid').replaceChildren(...SENA_SHOP.items.filter(i => i.slot === shop.slot).map(i => {
     const has = owned.has(i.id), on = eq[i.slot] === i.id;
     const tag = on ? el('span', { class: 'tag on' }, 'Puesto') : has ? el('span', { class: 'tag' }, 'Tuyo') : el('span', { class: 'tag price' + (coins < i.price ? ' poor' : '') }, el('i', { class: 'coin-ico sm' }), fmt(i.price));
-    const card = el('button', { type: 'button', class: 'item' + (shop.sel && shop.sel.id === i.id ? ' sel' : '') + (on ? ' worn' : ''), onclick: () => { shop.sel = i; SENA_SHOP.preview(shopEq()); renderShop(); } },
+    const card = el('button', { type: 'button', class: 'item' + (i.pro ? ' pro' : '') + (shop.sel && shop.sel.id === i.id ? ' sel' : '') + (on ? ' worn' : ''), onclick: () => { shop.sel = i; SENA_SHOP.preview(shopEq()); renderShop(); } },
       el('span', { class: 'item-ico', style: '--tint:' + ITEM_TINT[i.id] }, icon(ITEM_ICON[i.id], 34)), el('b', {}, i.name), tag);
     return card;
   }));
