@@ -3,6 +3,12 @@
   "appName": "SENA Bros",
   "webDir": "../www",
   "backgroundColor": "#0b1d0a",
-  "server": { "androidScheme": "https" },
-  "android": { "allowMixedContent": false, "adjustMarginsForEdgeToEdge": "force" }
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "adjustMarginsForEdgeToEdge": "force"
+  },
+  "loggingBehavior": "production"
 }

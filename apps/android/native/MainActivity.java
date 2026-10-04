@@ -1,5 +1,6 @@
 package com.senabros.game;
 
+import android.graphics.Color;
 import android.os.Bundle;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -11,6 +12,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ApkUpdaterPlugin.class);
         super.onCreate(savedInstanceState);
+        // el margen de la cámara frontal se pinta del color del juego (no gris)
+        getWindow().getDecorView().setBackgroundColor(Color.parseColor("#0b1d0a"));
         hideBars();
     }
 

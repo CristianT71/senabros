@@ -17,10 +17,10 @@ document.body.classList.add('app-' + kind);
 if (APP.native) document.body.classList.add('app-native');
 
 // ---------- Android: plugin propio (descarga el APK con progreso y abre el instalador) ----------
-const Apk = kind === 'android' ? cap.registerPlugin('ApkUpdater') : null;
+const Apk = kind === 'android' ? ((cap.Plugins && cap.Plugins.ApkUpdater) || (cap.registerPlugin && cap.registerPlugin('ApkUpdater'))) : null;   // sin empaquetador, Capacitor 7 expone los plugins en Capacitor.Plugins
 APP.openExternal = url => { if (kind === 'android') Apk.openUrl({ url }).catch(() => {}); else window.open(url, '_blank'); };
 const onAuth = u => { if (window.SENA_AUTH_CALLBACK) SENA_AUTH_CALLBACK(u); };
-if (kind === 'windows') desk.onAuthUrl && desk.onAuthUrl(onAuth); else if (Apk) Apk.addListener('authUrl', d => onAuth(d.url));
+try { if (kind === 'windows') desk.onAuthUrl && desk.onAuthUrl(onAuth); else if (Apk) Promise.resolve(Apk.addListener('authUrl', d => onAuth(d.url))).catch(() => {}); } catch (_) {}
 const newer = (a, b) => { const x = String(a).replace(/^v/, '').split('.').map(Number), y = String(b).replace(/^v/, '').split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] | 0) !== (y[i] | 0)) return (x[i] | 0) > (y[i] | 0); } return false; };
 
 // ---------- Ventana de actualización ----------
