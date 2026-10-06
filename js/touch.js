@@ -89,7 +89,7 @@ function syncUI() {
   $('sVib').checked = cfg.vib; $('sSwap').checked = cfg.swap;
 }
 function openSettings() { releaseAll(); syncUI(); panel.classList.add('show'); window.SENA_PAUSED = true; }
-function closeSettings() { panel.classList.remove('show'); save(); if (!editing) window.SENA_PAUSED = false; }
+function closeSettings() { panel.classList.remove('show'); save(); if (!editing) window.SENA_PAUSED = !!window.SENA_PAUSE_OPEN && !SENA_PAUSE_MULTI(); }
 $('tGear').addEventListener('click', e => { e.stopPropagation(); openSettings(); });
 for (const [s, v, k] of sliders) $(s).addEventListener('input', () => { cfg[k] = $(s).value / 100; $(v).textContent = $(s).value + '%'; apply(); });
 $('sVib').addEventListener('change', () => { cfg.vib = $('sVib').checked; if (cfg.vib && navigator.vibrate) navigator.vibrate(30); });

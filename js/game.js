@@ -15,12 +15,14 @@ const WATER_TOP = 12.3;                     // superficie del agua en niveles ac
 
 // ================= Audio (beeps retro) =================
 let actx = null, muted = false;
+let SFX_VOL = (() => { try { const v = parseFloat(localStorage.getItem('senabros_sfx')); return isNaN(v) ? 0.8 : Math.max(0, Math.min(1, v)); } catch (_) { return 0.8; } })();
+window.SENA_SFX = { setVolume(v) { SFX_VOL = Math.max(0, Math.min(1, v)); try { localStorage.setItem('senabros_sfx', String(SFX_VOL)); } catch (_) {} }, get volume() { return SFX_VOL; } };
 function beep(f = 440, d = 0.1, type = 'square', vol = 0.05, slide = 0) {
-  if (!actx || muted) return;
+  if (!actx || muted || SFX_VOL <= 0) return;
   const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
   o.type = type; o.frequency.setValueAtTime(f, t);
   if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + d);
-  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  g.gain.setValueAtTime(vol * SFX_VOL, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
   o.connect(g).connect(actx.destination); o.start(t); o.stop(t + d);
 }
 const SFX = {
@@ -46,6 +48,32 @@ const SFX = {
   shrink: () => { [784, 659, 523, 392].forEach((f, i) => setTimeout(() => beep(f, 0.1, 'square', 0.045), i * 80)); },
   oneup: () => { [659, 784, 1319, 1047, 1175, 1568].forEach((f, i) => setTimeout(() => beep(f, 0.1, 'square', 0.04), i * 90)); },
 };
+
+// ---- Efectos con ruido (patadas, multitud, silbato, cuerda): se hacen con ruido blanco filtrado ----
+let noiseBuf = null;
+function noiseBurst(d = 0.15, vol = 0.1, f0 = 1200, f1 = 300, type = 'lowpass', q = 1) {
+  if (!actx || muted || SFX_VOL <= 0) return;
+  if (!noiseBuf) { noiseBuf = actx.createBuffer(1, actx.sampleRate * 2, actx.sampleRate); const a = noiseBuf.getChannelData(0); for (let i = 0; i < a.length; i++) a[i] = Math.random() * 2 - 1; }
+  const s = actx.createBufferSource(), fl = actx.createBiquadFilter(), g = actx.createGain(), t = actx.currentTime;
+  s.buffer = noiseBuf; s.loop = true; fl.type = type; fl.Q.value = q;
+  fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + d);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * SFX_VOL, t + Math.min(0.03, d / 3)); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  s.connect(fl).connect(g).connect(actx.destination); s.start(t, Math.random()); s.stop(t + d + 0.02);
+}
+Object.assign(SFX, {
+  kick: () => { noiseBurst(0.09, 0.16, 900, 200); beep(150, 0.12, 'sine', 0.12, -90); },
+  bounce: v => { beep(120 + Math.min(60, v * 6), 0.1, 'sine', Math.min(0.12, 0.03 + v * 0.01), -50); },
+  whistle: () => { if (!actx || muted || SFX_VOL <= 0) return; const o = actx.createOscillator(), l = actx.createOscillator(), lg = actx.createGain(), g = actx.createGain(), t = actx.currentTime;
+    o.type = 'sine'; o.frequency.value = 2650; l.frequency.value = 28; lg.gain.value = 90; l.connect(lg).connect(o.frequency);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.07 * SFX_VOL, t + 0.03); g.gain.setValueAtTime(0.07 * SFX_VOL, t + 0.45); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    o.connect(g).connect(actx.destination); o.start(t); l.start(t); o.stop(t + 0.62); l.stop(t + 0.62); },
+  goal: () => { noiseBurst(1.9, 0.1, 500, 1800, 'bandpass', 0.7); [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.18, 'square', 0.05), i * 110)); setTimeout(() => beep(1047, 0.5, 'square', 0.05), 440); },
+  grab: () => beep(320, 0.1, 'square', 0.05, 380),
+  throw: () => { noiseBurst(0.25, 0.1, 400, 2400, 'bandpass', 1.2); setTimeout(() => beep(110, 0.12, 'sine', 0.11, -60), 140); },
+  ropeTight: () => { noiseBurst(0.07, 0.12, 3500, 1200, 'highpass'); beep(95, 0.16, 'sawtooth', 0.045, 45); },
+  tick: () => beep(1400, 0.05, 'square', 0.03),
+  click: () => beep(900, 0.04, 'square', 0.03),
+});
 
 // ================= Render =================
 const renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: /test=/.test(location.hash) });
@@ -116,7 +144,7 @@ function setQuality(pref) {
   applyQuality(pref === 'auto' ? autoQuality() : pref);
 }
 const Q_LABEL = { alta: 'Alta', media: 'Media', baja: 'Baja' };
-function syncMusicUI() { const r = document.getElementById('sMusic'); if (r) { r.value = Math.round(MUS.vol * 100); document.getElementById('vMusic').textContent = Math.round(MUS.vol * 100) + '%'; } }
+function syncMusicUI() { const rs = document.getElementById('sSfx'); if (rs) { rs.value = Math.round(SFX_VOL * 100); document.getElementById('vSfx').textContent = Math.round(SFX_VOL * 100) + '%'; } const r = document.getElementById('sMusic'); if (r) { r.value = Math.round(MUS.vol * 100); document.getElementById('vMusic').textContent = Math.round(MUS.vol * 100) + '%'; } }
 function syncGfxUI() {
   syncMusicUI();
   document.querySelectorAll('#gfxBtns button').forEach(b => b.classList.toggle('on', b.dataset.q === qPref));
@@ -2149,12 +2177,12 @@ function teamGrabPress(p) {   // true si el botón se usó para agarrar o lanzar
     if (!r) return true;
     const strong = held('ShiftLeft', 'ShiftRight'), up = held('ArrowUp', 'KeyW');
     net('tthrow', { u: r.uid, vx: rnd2(p.facing * (strong ? 16 : 12.5) + p.vx * 0.4), vy: up ? 17 : 12.5 });
-    play('M_Punch', { loop: false, fade: 0.05, speed: 1.4 }); SFX.jump(); shake = 0.15; addStat('throws');
+    play('M_Punch', { loop: false, fade: 0.05, speed: 1.4 }); SFX.throw(); shake = 0.15; addStat('throws');
     burstColor(r.x, r.y + 1.2, 0xffd23f, 14, 4);
     return true;
   }
   const r = mateInReach(p); if (!r) return false;
-  p.carrying = r.uid; net('tgrab', { u: r.uid }); SFX.bump();
+  p.carrying = r.uid; net('tgrab', { u: r.uid }); SFX.grab();
   toast('Agarraste a ' + r.name + '. Otra vez para lanzarlo', 1400);
   return true;
 }
@@ -2169,6 +2197,7 @@ function updateCarried(p) {   // me están cargando: voy sobre la cabeza del que
 // ---- Atados: una cuerda elástica une a cada jugador con sus vecinos (orden por id) ----
 const ROPE_L = 4.4, ROPE_SEG = 12, ROPE_UP = new T.Vector3(0, 1, 0);
 const ropeMeshes = new Map();
+let ropeSndT = 0;
 const ropeGeo = new T.CylinderGeometry(0.045, 0.045, 1, 6), ropeMat = new T.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.95 });
 function ropeIds() { return [game.mp.me, ...teammates().map(r => r.uid)].sort(); }
 function ropePartners() { const ids = ropeIds(), i = ids.indexOf(game.mp.me); return [ids[i - 1], ids[i + 1]].filter(Boolean).map(u => remotes.get(u)).filter(Boolean); }
@@ -2202,6 +2231,8 @@ function updateRopes() {
       if (!segs) { segs = []; for (let k = 0; k < ROPE_SEG; k++) { const m = new T.Mesh(ropeGeo, ropeMat); scene.add(m); segs.push(m); } ropeMeshes.set(key, segs); }
       const d = Math.hypot(A.x - B.x, A.y - B.y), sag = Math.max(0, ROPE_L - d) * 0.45;
       if (d > ROPE_L * 0.96) taut = true;
+      if (d > ROPE_L * 0.98 && !ropeMeshes.get(key).wasTaut && performance.now() > ropeSndT) { SFX.ropeTight(); ropeSndT = performance.now() + 700; }
+      ropeMeshes.get(key).wasTaut = d > ROPE_L * 0.98;
       const pt = t => new T.Vector3(A.x + (B.x - A.x) * t, A.y + (B.y - A.y) * t - sag * 4 * t * (1 - t), 0.15);
       for (let k = 0; k < ROPE_SEG; k++) {
         const a = pt(k / ROPE_SEG), b = pt((k + 1) / ROPE_SEG), m = segs[k];
@@ -2252,6 +2283,36 @@ function buildGoalsDeco() {
     flagM.position.set(gx, 5.5 + 0.2, 0.52); levelGroup.add(flagM);
   });
 }
+
+// ---- Repetición de cada gol (cámara lenta): se graban los últimos ~2,5 s de lo que se ve y se vuelven a mostrar ----
+const REPLAY_REC = 2.6, REPLAY_SPEED = 0.55, REPLAY_SEC = REPLAY_REC / REPLAY_SPEED + 0.6, replayEl = document.getElementById('replayBanner');
+function futReplayRecord(F, dt) {
+  F.recT = (F.recT || 0) + dt; if (F.recT < 1 / 30) return; F.recT = 0;
+  const snap = o => ({ x: o.position.x, y: o.position.y, z: o.position.z, ry: o.rotation.y, rz: o.rotation.z, s: o.scale.x });
+  const s = { t: performance.now() / 1000, ball: { x: F.ball.x, y: F.ball.y, rot: F.mesh.rotation.z }, me: model ? snap(model) : null, others: {} };
+  remotes.forEach(r => { if (r.model && r.model.visible) s.others[r.uid] = snap(r.model); });
+  (F.rec = F.rec || []).push(s);
+  while (F.rec.length && s.t - F.rec[0].t > REPLAY_REC) F.rec.shift();
+}
+function futReplayStart(F) {
+  if (!F.rec || F.rec.length < 8) return;
+  F.replay = { frames: F.rec.slice(), t: 0, dur: (F.rec[F.rec.length - 1].t - F.rec[0].t) / REPLAY_SPEED };
+  replayEl.hidden = false; document.body.classList.add('replaying'); SFX.whistle();
+}
+function futReplayFrame(dt) {   // se llama después de actualizar el juego: pisa las posiciones con las grabadas
+  const m = game.mp, F = m && m.mode === 'futbol' && m.fut; if (!F) { replayEl.hidden = true; document.body.classList.remove('replaying'); return; }
+  const R = F.replay; if (!R) { if (!replayEl.hidden) { replayEl.hidden = true; document.body.classList.remove('replaying'); } return; }
+  R.t += dt;
+  if (R.t >= R.dur) { F.replay = null; replayEl.hidden = true; document.body.classList.remove('replaying'); return; }
+  const k = R.t / R.dur * (R.frames.length - 1), i = Math.floor(k), f = k - i, A = R.frames[i], B = R.frames[Math.min(R.frames.length - 1, i + 1)];
+  const lerp = (a, b) => a + (b - a) * f, apply = (o, a, b) => { if (!o || !a || !b) return; o.position.set(lerp(a.x, b.x), lerp(a.y, b.y), lerp(a.z, b.z)); o.rotation.y = lerp(a.ry, b.ry); o.rotation.z = lerp(a.rz, b.rz); o.scale.setScalar(lerp(a.s, b.s)); };
+  F.mesh.position.set(lerp(A.ball.x, B.ball.x), lerp(A.ball.y, B.ball.y), 0); F.mesh.rotation.z = lerp(A.ball.rot, B.ball.rot);
+  apply(model, A.me, B.me);
+  remotes.forEach(r => { if (r.model) { const a = A.others[r.uid], b = B.others[r.uid]; if (a && b) apply(r.model, a, b); r.tag.visible = false; } });
+  F.rings.forEach(r => { r.visible = false; });
+  R.cam = { x: F.mesh.position.x, y: F.mesh.position.y };
+}
+const futReplayCam = () => { const F = game.mp && game.mp.mode === 'futbol' && game.mp.fut; return F && F.replay && F.replay.cam ? F.replay.cam : null; };
 function futbolInit() {
   const m = game.mp;
   m.fut = { score: [0, 0], left: FUT_TIME, golden: false, state: 'kick', t: 3, ball: { x: FUT_W / 2, y: 8, vx: 0, vy: 0, rot: 0, last: '' }, sendT: 0, kickCd: 0, goals: 0, rings: new Map(), over: false, endAfter: false };
@@ -2275,10 +2336,10 @@ function ballStep(b, dt) {
         if (d < 1e-4) { dx = 0; dy = 1; d = 1; }
         const nx = dx / d, ny = dy / d; b.x += nx * (BALL_R - d); b.y += ny * (BALL_R - d);
         const vn = b.vx * nx + b.vy * ny;
-        if (vn < 0) { const e = Math.abs(vn) > 2 ? 0.62 : 0; b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny; }
+        if (vn < 0) { if (-vn > (b.hit || 0)) b.hit = -vn; const e = Math.abs(vn) > 2 ? 0.62 : 0; b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny; }
         if (ny > 0.7) b.vx *= 1 - 0.7 * h;   // rueda y frena en el pasto
       }
-    if (b.y < 2 + BALL_R) { b.y = 2 + BALL_R; if (b.vy < 0) b.vy = Math.abs(b.vy) > 2 ? -b.vy * 0.62 : 0; }
+    if (b.y < 2 + BALL_R) { b.y = 2 + BALL_R; if (b.vy < 0) { if (-b.vy > (b.hit || 0)) b.hit = -b.vy; b.vy = Math.abs(b.vy) > 2 ? -b.vy * 0.62 : 0; } }
     if (b.y > 15) { b.y = 15; b.vy = -Math.abs(b.vy) * 0.5; }
   }
   b.rot -= b.vx * dt / BALL_R;
@@ -2296,7 +2357,7 @@ function futKickCheck(p, dt) {
     vx = p.facing * (up ? 11 : 18); vy = up ? 15 : dn ? 2.5 : 8; SFX.punch(); shake = 0.2; burstColor(b.x, b.y, 0xffffff, 10, 4);
   } else if (b.y > top - 0.1) { vx = p.facing * 6 + p.vx * 0.6; vy = 10; SFX.bump(); }   // cabezazo
   else { const sg = Math.sign(dx) || p.facing; vx = sg * Math.max(5, Math.abs(p.vx) * 1.25 + 2); vy = Math.max(b.vy, 3.5 + Math.max(0, p.vy) * 0.6); b.x = p.x + sg * (p.hw + BALL_R + 0.02); }
-  b.vx = vx; b.vy = vy; b.last = game.mp.me; F.kickCd = 0.18;
+  b.vx = vx; b.vy = vy; b.last = game.mp.me; F.kickCd = 0.18; SFX.kick();
   net('kick', { x: rnd2(b.x), y: rnd2(b.y), vx: rnd2(vx), vy: rnd2(vy) });
 }
 function futBallNet(q, fromKick, uid) {
@@ -2308,11 +2369,11 @@ function futBallNet(q, fromKick, uid) {
 }
 function futGoal(side, s, by) {
   const m = game.mp, F = m && m.fut; if (!F || F.state !== 'play') return;
-  F.score = [s[0] | 0, s[1] | 0]; F.state = 'goal'; F.t = 3.2; if (F.golden) F.endAfter = true;
+  F.score = [s[0] | 0, s[1] | 0]; F.state = 'goal'; F.t = 1.5 + REPLAY_SEC; F.replayAt = 1.5; if (F.golden) F.endAfter = true;
   const own = !!by && futTeam(by) !== side, who = by === m.me ? 'Tú' : (m.names[by] || '');
   if (by === m.me && !own) { F.goals++; addStat('goals'); }
   toast((own ? '¡Autogol! Punto para los ' : '¡GOOOL de los ') + FUT_NAME[side] + (own ? '' : '!') + (who ? '   ' + who : ''), 2600);
-  SFX.win(); shake = 0.5;
+  SFX.goal(); shake = 0.5;
   const gx = side === 1 ? 2 : FUT_W - 2; for (let i = 0; i < 4; i++) setTimeout(() => { if (game.mp) burstColor(gx, 3.5, FUT_COL[side], 30, 8); }, i * 200);
 }
 function futOver() {
@@ -2330,13 +2391,15 @@ function futRing(F, uid, x, y, t) {
 function updateFutbol(dt) {
   const m = game.mp, F = m.fut; if (!F) return; const b = F.ball;
   if (F.state === 'kick') {
-    F.t -= dt; b.x = FUT_W / 2; b.y = 8; b.vx = b.vy = 0;
-    if (F.t <= 0) { F.state = 'play'; SFX.bump(); toast('¡A jugar!', 900); }
+    const sec0 = Math.ceil(F.t); F.t -= dt; b.x = FUT_W / 2; b.y = 8; b.vx = b.vy = 0; if (Math.ceil(F.t) < sec0 && F.t > 0) SFX.tick();
+    if (F.t <= 0) { F.state = 'play'; SFX.whistle(); toast('¡A jugar!', 900); }
   } else if (F.state === 'goal') {
     F.t -= dt; ballStep(b, dt);
+    if (F.replayAt != null && F.t <= REPLAY_SEC) { F.replayAt = null; futReplayStart(F); }
     if (F.t <= 0) { if (F.endAfter) futOver(); else { F.state = 'kick'; F.t = 2.2; futbolPlace(); } }
   } else if (F.state === 'play') {
     ballStep(b, dt); futKickCheck(player, dt);
+    if (b.hit > 4) { SFX.bounce(b.hit); } b.hit = 0;
     F.left -= dt;
     if (F.left <= 0 && !F.golden) {
       if (F.score[0] === F.score[1]) { F.golden = true; toast('¡Empate! Gol de oro: el próximo gol gana', 2600); SFX.oneup(); } else futOver();
@@ -2348,6 +2411,7 @@ function updateFutbol(dt) {
     }
   }
   F.mesh.position.set(b.x, b.y, 0); F.mesh.rotation.z = b.rot;
+  futReplayRecord(F, dt);
   F.rings.forEach(r => { r.visible = false; });
   futRing(F, m.me, player.x, player.y, futTeam(m.me));
   teammates().forEach(r => futRing(F, r.uid, r.x, r.y, futTeam(r.uid)));
@@ -3857,11 +3921,52 @@ addEventListener('keydown', e => {
     if (e.code === 'ArrowDown' || e.code === 'KeyS') mapMove(0, 1);
     if (e.code === 'Enter' || e.code === 'Space') mapEnter();
     if (e.code === 'Escape') transition(() => showTitle());
-  } else if (e.code === 'Escape' && game.state === 'play') { if (game.mp) { if (window.SenaMP) SenaMP.leaveLevel(); } else if (game.custom) exitCustom({ quit: true }); else transition(() => showMap({ banner: false })); }
+  } else if (e.code === 'Escape' && game.state === 'play') { if (pauseOpen()) closePause(); else openPause(); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 const held = (...c) => c.some(k => keys[k]);
 const inMenu = () => game.state === 'title' || game.state === 'over' || (game.state === 'won' && overlay.classList.contains('show'));
+
+// ================= Menú de pausa =================
+// En una partida sola congela el juego; en línea el juego sigue para los demás (el menú solo permite salir o seguir).
+const pauseMenu = document.getElementById('pauseMenu');
+const pmSolo = () => !game.mp;
+function pauseOpen() { return !pauseMenu.hidden; }
+function openPause() {
+  if (game.state !== 'play' || pauseOpen()) return;
+  Object.keys(keys).forEach(k => { keys[k] = false; });
+  pauseMenu.hidden = false; window.SENA_PAUSE_OPEN = true; if (pmSolo()) window.SENA_PAUSED = true;
+  document.getElementById('pmNote').textContent = pmSolo() ? 'El juego está en pausa.' : 'En línea el juego sigue para tus amigos.';
+  document.getElementById('pmRestart').hidden = !pmSolo() || !!game.custom || !!game.challenge;
+  document.getElementById('pmExit').textContent = game.mp ? 'Salir de la sala' : game.custom ? 'Salir del nivel' : 'Salir al mapa';
+  document.getElementById('pmControls').hidden = !document.body.classList.contains('touch');
+  pmSync(); SFX.click();
+}
+function closePause() {
+  if (!pauseOpen()) return;
+  pauseMenu.hidden = true; window.SENA_PAUSE_OPEN = false;
+  if (!tSettings.classList.contains('show')) window.SENA_PAUSED = false;
+}
+function pmSync() {
+  document.getElementById('pmMusic').value = Math.round(MUS.vol * 100); document.getElementById('pmMusicV').textContent = Math.round(MUS.vol * 100) + '%';
+  document.getElementById('pmSfx').value = Math.round(SFX_VOL * 100); document.getElementById('pmSfxV').textContent = Math.round(SFX_VOL * 100) + '%';
+}
+function pauseExit() {
+  closePause();
+  if (game.mp) { if (window.SenaMP) SenaMP.leaveLevel(); }
+  else if (game.custom) exitCustom({ quit: true });
+  else transition(() => showMap({ banner: false }));
+}
+document.getElementById('pmResume').onclick = closePause;
+document.getElementById('pmRestart').onclick = () => { closePause(); if (!charLoading) startGame(); };
+document.getElementById('pmExit').onclick = pauseExit;
+document.getElementById('pmControls').onclick = () => { const g = document.getElementById('tGear'); if (g) g.click(); };
+document.getElementById('pmMusic').addEventListener('input', e => { window.SENA_MUSIC.setVolume(e.target.value / 100); pmSync(); syncMusicUI(); });
+document.getElementById('pmSfx').addEventListener('input', e => { window.SENA_SFX.setVolume(e.target.value / 100); pmSync(); SFX.coin(); });
+document.getElementById('sSfx').addEventListener('input', e => { window.SENA_SFX.setVolume(e.target.value / 100); syncMusicUI(); SFX.coin(); });
+pauseMenu.addEventListener('pointerdown', e => { if (e.target === pauseMenu) closePause(); });
+window.SENA_PAUSE_MULTI = () => !!game.mp;
+window.SENA_PAUSE = { open: openPause, close: closePause, get isOpen() { return pauseOpen(); } };
 
 // ================= Update =================
 function approach(v, t, d) { return v < t ? Math.min(v + d, t) : Math.max(v - d, t); }
@@ -4164,9 +4269,10 @@ function update(dt) {
     updateBackdrop(player.x - 1.5, player.y + 1.6);
     return;
   }
-  const tx = Math.max(7, Math.min(W - 7, player.x + player.facing * 2.2));
+  const rc = futReplayCam();
+  const tx = Math.max(7, Math.min(W - 7, rc ? rc.x : player.x + player.facing * 2.2));
   camX += (tx - camX) * Math.min(1, dt * 3.5);
-  const ty = Math.max(4.6, Math.min(levelSpec(game.level).cave ? 6.8 : 10, player.y + 2.1));
+  const ty = Math.max(4.6, Math.min(levelSpec(game.level).cave ? 6.8 : 10, rc ? rc.y + 1.5 : player.y + 2.1));
   camY += (ty - camY) * Math.min(1, dt * 3);
   shake *= Math.exp(-8 * dt);
   camera.position.set(camX + (Math.random() - 0.5) * shake, camY + 0.8 + (Math.random() - 0.5) * shake, game.mp && game.mp.mode === 'futbol' ? 13 : 10.5);   // en el fútbol se ve más cancha
@@ -4644,7 +4750,7 @@ Promise.all(enemyEntries.map(name =>
   setTimeout(() => { document.getElementById('loading').classList.add('done'); menuPose(); }, 350);
   // modo prueba: index.html#test=2-5 abre ese nivel, #test=map2 abre el mapa del mundo 2
   const tm = /test=(map)?(\d)(?:-(\d))?/.exec(location.hash);
-  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, ropes: () => ropeMeshes.size, lasers: () => lasers.map(l => ({ x: l.x, on: l.on })), lowgrav: () => lowgrav.slice(), mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), specAt: (w, i) => levelSpec(i, w), partyRound, blockMat: (x, y) => { const m = blockMesh[x + ',' + y]; return m ? (m.material === MAT.quiz ? 'quiz' : m.material === MAT.question ? 'question' : 'otro') : null; }, gridAt: (x, y) => grid[x] && grid[x][y], boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
+  if (/test=|dbg/.test(location.hash)) window.__sena = { game, completeLevel, finishChallenge, killEnemy, startWin, die, get enemies() { return enemies; }, get player() { return player; }, sfx: SFX, ropes: () => ropeMeshes.size, pause: () => ({ open: pauseOpen(), paused: !!window.SENA_PAUSED }), lasers: () => lasers.map(l => ({ x: l.x, on: l.on })), lowgrav: () => lowgrav.slice(), mem: () => Object.assign({}, renderer.info.memory), quality: () => qLevel, setQuality, buildLevel, spec: () => levelSpec(game.level), specAt: (w, i) => levelSpec(i, w), partyRound, blockMat: (x, y) => { const m = blockMesh[x + ',' + y]; return m ? (m.material === MAT.quiz ? 'quiz' : m.material === MAT.question ? 'question' : 'otro') : null; }, gridAt: (x, y) => grid[x] && grid[x][y], boltState: () => ({ warn: bolts.some(b => b.ring.visible), hit: bolts.some(b => b.beam.visible) }),
     remotes: () => [...remotes.values()].map(r => ({ name: r.name, has: r.has, vis: !!(r.model && r.model.visible), x: r.x, y: r.y, anim: r.curName, cos: r.cos || '', acc: (() => { let n = 0; if (r.model) r.model.traverse(o => { if (o.userData.isAcc) n++; }); return n; })() })) };   // solo en modo prueba
   if (tm) setTimeout(async () => {
     const tc = /c=(\w+)/.exec(location.hash);   // #test=1-1;c=Juan elige instructor
@@ -4662,6 +4768,7 @@ Promise.all(enemyEntries.map(name =>
   (function loop(now) {
     const raw = (now - last) / 1000, dt = Math.min(0.033, raw); last = now; watchFps(raw);
     if (!window.SENA_PAUSED) update(dt);   // pausado mientras se abren los ajustes
+    futReplayFrame(dt);
     renderer.render(scene, camera); requestAnimationFrame(loop);
   })(last);
 }).catch(err => {

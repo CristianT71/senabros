@@ -457,6 +457,7 @@
       <small id="gfxNote" class="ts-note"></small>
       <div class="ts-sec">SONIDO</div>
       <label>Música <b id="vMusic">45%</b><input type="range" id="sMusic" min="0" max="100" step="5"></label>
+      <label>Efectos <b id="vSfx">80%</b><input type="range" id="sSfx" min="0" max="100" step="5"></label>
       <small class="ts-note">La tecla M silencia todo el sonido.</small>
       <div class="ts-row"><button id="sTuto" type="button">Ver el tutorial otra vez</button></div>
       <div class="ts-sec">APP</div>
@@ -482,6 +483,22 @@
 
   <div id="wipe"></div>
   <div id="toast"></div>
+  <div id="replayBanner" hidden><i></i>REPETICIÓN</div>
+  <div id="pauseMenu" hidden>
+    <div class="pm-card">
+      <div class="pm-title">PAUSA</div>
+      <small id="pmNote" class="pm-note"></small>
+      <button id="pmResume" type="button" class="pm-go">CONTINUAR</button>
+      <label>Música <b id="pmMusicV">45%</b><input type="range" id="pmMusic" min="0" max="100" step="5"></label>
+      <label>Efectos <b id="pmSfxV">80%</b><input type="range" id="pmSfx" min="0" max="100" step="5"></label>
+      <div class="pm-row">
+        <button id="pmControls" type="button" hidden>Controles</button>
+        <button id="pmRestart" type="button">Reiniciar nivel</button>
+        <button id="pmExit" type="button" class="danger">Salir</button>
+      </div>
+      <small class="pm-note">Esc o el botón de pausa para volver.</small>
+    </div>
+  </div>
 
   <div id="loading">
     <div class="logo">

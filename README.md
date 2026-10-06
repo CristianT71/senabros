@@ -174,6 +174,15 @@ Agrega al final de la dirección:
 - Al terminar todos vuelven a la sala con la tabla de resultados.
 - Canales privados: solo jugadores con cuenta (políticas en `supabase/migrations/20261003000000_multijugador_realtime.sql`).
 
+### Sonido, pausa y repetición
+- **Efectos:** `SFX` (js/game.js) son sonidos sintéticos; los de los modos nuevos usan ruido filtrado (`noiseBurst`: patada, multitud del gol,
+  silbato, cuerda tensa, lanzamiento). Volumen propio en Ajustes y en la pausa (`senabros_sfx`, se guarda en el dispositivo).
+- **Pausa:** Esc o el botón de pausa abre `#pauseMenu`. Sola congela el juego (Continuar, Reiniciar, Salir al mapa); en línea no congela y
+  solo permite seguir o salir de la sala. Sustituye al comportamiento anterior (Esc salía directo del nivel).
+- **Repetición del gol:** el fútbol graba ~2,6 s de posiciones de lo que se ve (`futReplayRecord`) y tras el gol las muestra a cámara lenta
+  (0,55x) siguiendo el balón, con el cartel REPETICIÓN. Cada jugador la reproduce con sus propios datos.
+- Prueba: `pgtest/pausa_check.mjs`.
+
 ### Atados, agarrar/lanzar y Fútbol
 - **Atados:** cada jugador va amarrado a sus vecinos (orden por id) con una cuerda de 4,4 bloques. Cada uno simula la cuerda sobre su
   propio personaje: el que está en el aire es el que se mueve y el que pisa firme hace de ancla (por eso se sostiene al que cae a un hueco).
