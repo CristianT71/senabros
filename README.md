@@ -13,7 +13,7 @@ los instructores de ADSO (Análisis y Desarrollo de Software) contra los bugs.
 | Correr | Shift | B |
 | Saltar | Espacio / W | A |
 | Agacharse / *ground pound* en el aire | S | Cruceta abajo |
-| Puñetazo | J | 👊 |
+| Puño | J | 👊 |
 | Poder del instructor | K | ⚡ |
 | Volver al mapa | Esc | ⏸ |
 
